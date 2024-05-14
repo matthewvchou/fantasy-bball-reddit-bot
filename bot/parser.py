@@ -1,4 +1,4 @@
-#!../reddit_venv/bin/python3.10
+#!../venv/bin/python3.11
 
 import numpy as np
 import pandas as pd
