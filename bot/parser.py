@@ -31,6 +31,7 @@ def parser(season: str) -> pd.DataFrame:
     '''
     
     #Gets all 581 players from the NBA in the 2023-24 season
+    #This data tells per game
     all_players = fantasywidget.FantasyWidget(season=season, league_id=LEAGUE_ID).get_dict()
     df = pd.DataFrame(columns=all_players["resultSets"][0]["headers"])
 
