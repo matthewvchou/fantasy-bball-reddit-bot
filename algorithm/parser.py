@@ -108,6 +108,7 @@ def per_week(week: date) -> pd.DataFrame:
         # print(day.date().day - current_date.day)
         df_day = per_day(specific_day.date().day - current_date.day)
         df_total = pd.concat([df_total, df_day], ignore_index=True)
+        print(df_day)
 
     aggregation_functions = {col: 'sum' for col in df_total.columns if col not in ['PLAYER_ID', 'PLAYER_NAME', 'TEAM_ID']}
     grouped = df_total.groupby(['PLAYER_ID', 'PLAYER_NAME'], as_index=False).agg(aggregation_functions)

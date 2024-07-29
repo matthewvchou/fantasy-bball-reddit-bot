@@ -7,7 +7,10 @@ nba_api==1.4.1
 numpy==1.26.4
 pandas==2.2.2
 pandas-stubs==2.2.2.240514
+praw==7.7.1
+prawcore==2.4.0
 python-dateutil==2.9.0.post0
+python-dotenv==1.0.1
 pytz==2024.1
 requests==2.31.0
 six==1.16.0
@@ -16,4 +19,6 @@ types-pytz==2024.1.0.20240417
 types-requests==2.31.0.20240406
 typing_extensions==4.11.0
 tzdata==2024.1
+update-checker==0.18.0
 urllib3==2.2.1
+websocket-client==1.8.0
