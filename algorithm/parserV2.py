@@ -1,83 +1,80 @@
 #!../venv/bin/python3.11
 
 import requests
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import Select
+from time import sleep
+from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 import pandas as pd
 
-def daily_url() -> str:
-    '''
-    Function to create URL to Basketball Reference's Daily Leaders site for the previous day
+def start_remote_server(server: str):
+    # Start driver
+    options = webdriver.ChromeOptions()
+    driver = webdriver.Remote(command_executor=server, options=options)
 
-    return str: URL to Basketball Reference's Daily Leaders site for previous day
-    '''
-    # Get yesterday's date
-    today = datetime.now() - timedelta(2)
-    yesterday = today.strftime('%Y %m %d').split()
-    print(yesterday)
+    # Go to Basketball Monster Webpage
+    driver.get('https://basketballmonster.com/playerrankings.aspx')
 
-    # Make URL
-    url = 'https://www.basketball-reference.com/friv/dailyleaders.fcgi?month={}&day={}&year={}'.format(yesterday[1], yesterday[2], yesterday[0])
-    return url
+    # Select 'Past Days' -> automatically goes to the past 1 day
+    selection = driver.find_element(By.NAME, 'DateFilterControl')
+    select = Select(selection)
+    select.select_by_visible_text('Past Days')
 
-def daily_players():
-    '''
-    Function to create pd.Dataframe of all players that played the previous day
+    return driver
 
-    return pd.Dataframe:    pd.Dataframe containing all players and their relevant stats
-    '''
-    # Make request and parse using Beautiful Soup
-    r = requests.get(daily_url())
-    soup = BeautifulSoup(r.content, features="html.parser")
+def get_stats(driver):
+    # Get HTML to pass into 
+    html = driver.page_source
+    soup = BeautifulSoup(html, features="html.parser")
     raw = soup.find_all('tr')
     players = []
-    # Find each player's stats and input into dictionary
     for row in raw:
-        player = row.find('td')
-        if not player:
+        stats_raw = row.find_all('td', class_=['tdr', 'tdl'])
+        if not len(stats_raw):
             continue
         player_stats = {}
-        player_stats['NAME'] = row.find('td', {'data-stat': 'player'}).text.strip()
-        player_stats['MINUTES'] = row.find('td', {'data-stat': 'mp'}).text.strip()  # Keep as string to maintain "MM:SS" format
-        # Get total seconds played (for filtering <24 minutes played)
-        temp_seconds = player_stats['MINUTES'].split(':')
-        player_stats['SECONDS'] = (int(temp_seconds[0]) * 60) + int(temp_seconds[1])
-        player_stats['FG'] = int(row.find('td', {'data-stat': 'fg'}).text.strip())
-        player_stats['FGA'] = int(row.find('td', {'data-stat': 'fga'}).text.strip())
-        player_stats['FGM'] = player_stats['FGA'] - player_stats['FG']
-        player_stats['FG3'] = int(row.find('td', {'data-stat': 'fg3'}).text.strip())
-        player_stats['FG3A'] = int(row.find('td', {'data-stat': 'fg3a'}).text.strip())
-        player_stats['FG3M'] = player_stats['FG3A'] - player_stats['FG3']
-        player_stats['FT'] = int(row.find('td', {'data-stat': 'ft'}).text.strip())
-        player_stats['FTA'] = int(row.find('td', {'data-stat': 'fta'}).text.strip())
-        player_stats['FTM'] = player_stats['FTA'] - player_stats['FT']
-        player_stats['ORB'] = int(row.find('td', {'data-stat': 'orb'}).text.strip())
-        player_stats['DRB'] = int(row.find('td', {'data-stat': 'drb'}).text.strip())
-        player_stats['RB'] = int(row.find('td', {'data-stat': 'trb'}).text.strip())
-        player_stats['AST'] = int(row.find('td', {'data-stat': 'ast'}).text.strip())
-        player_stats['STL'] = int(row.find('td', {'data-stat': 'stl'}).text.strip())
-        player_stats['BLK'] = int(row.find('td', {'data-stat': 'blk'}).text.strip())
-        player_stats['TOV'] = int(row.find('td', {'data-stat': 'tov'}).text.strip())
-        player_stats['PTS'] = int(row.find('td', {'data-stat': 'pts'}).text.strip())
-        fantasy = fantasy_score(player_stats)
-        player_stats['FTSY'] = fantasy
+        player_stats['NAME'] = stats_raw[3].text.strip()
+        player_stats['BM_VAL'] = float(stats_raw[2].text.strip())
+        player_stats['MINUTES'] = float(stats_raw[5].text.strip())
+        fg_pct = float(stats_raw[12].text.strip())
+        player_stats['FG_AT'] = int(float(stats_raw[13].text.strip()))
+        player_stats['FG_MADE'] = round(fg_pct * player_stats['FG_AT'])
+        ft_pct = float(stats_raw[14].text.strip())
+        player_stats['FT_AT'] = int(float(stats_raw[15].text.strip()))
+        player_stats['FT_MADE'] = round(ft_pct * player_stats['FT_AT'])
+        player_stats['3P_MADE'] = int(float(stats_raw[7].text.strip()))
+        player_stats['RB'] = int(float(stats_raw[8].text.strip()))
+        player_stats['AST'] = int(float(stats_raw[9].text.strip()))
+        player_stats['STL'] = int(float(stats_raw[10].text.strip()))
+        player_stats['BLK'] = int(float(stats_raw[11].text.strip()))
+        player_stats['TOV'] = int(float(stats_raw[16].text.strip()))
+        player_stats['PTS'] = int(float(stats_raw[6].text.strip()))
+        player_stats['ESPN'] = espn_score(player_stats)
         players.append(player_stats)
-    
-    # Return pd.Dataframe of players
+    driver.quit()
     return pd.DataFrame(players)
 
-def fantasy_score(player: dict) -> int:
-    return (player['FG'] * 0.5) - (player['FGM'] * 0.5) + player['FT'] - player['FTM'] + (player['FG3'] * 2) - player['FG3M'] + (player['ORB'] * 1.5) + player['DRB'] + player['AST'] + (player['STL'] * 1.5) + (player['BLK'] * 1.5) - player['TOV'] + player['PTS']
+def espn_score(player: dict) -> int:
+    return player['PTS'] + player['3P_MADE'] - player['FG_AT'] + (2 * player['FG_MADE']) - player['FT_AT'] + player['FT_MADE'] + player['RB'] + (2 * player['AST']) + (4 * player['STL']) + (4 * player['BLK']) - (2 * player['TOV'])
 
 def rank(players, ascend: bool):
-    return players[players['SECONDS'] > 1440].sort_values(by='FTSY', ascending=ascend)
+    if ascend:
+        return players[players['MINUTES'] >= 24].sort_values(by='BM_VAL', ascending=ascend)
+    else:
+        return players.sort_values(by='BM_VAL', ascending=ascend)
 
 def main():
-    players = daily_players()
-    top_ten = rank(players, False)
-    bottom_ten = rank(players, True)
-    print(top_ten)
-    print(bottom_ten)
+    server = 'http://10.5.222.9:4444'
+    driver = start_remote_server(server)
+    players = get_stats(driver)
+    bottom = rank(players, True)
+    top = rank(players, False)
+    print(top)
+    print(bottom)
+    
 
 if __name__ == '__main__':
     main()
