@@ -109,8 +109,9 @@ def make_dataframe(columns, player_stats):
 
 
 def main():
-    week = True
-    date = datetime(2024, 5, 7) 
+    week = False
+    date = datetime(2024, 10, 22) 
+    print(date)
     columns, player_stats = generate_player_stats(week=week, date=date)
     df = make_dataframe(columns=columns, player_stats=player_stats)
     
