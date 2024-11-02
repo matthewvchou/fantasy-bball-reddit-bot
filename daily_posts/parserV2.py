@@ -67,7 +67,7 @@ def rank(players, ascend: bool):
         return players.sort_values(by='BM_VAL', ascending=ascend)
 
 def main():
-    server = 'http://10.5.222.9:4444'
+    server = 'http://10.31.176.65:4444'
     driver = start_remote_server(server)
     players = get_stats(driver)
     bottom = rank(players, True)
