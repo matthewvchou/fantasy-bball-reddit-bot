@@ -66,7 +66,7 @@ def insert_player(index, player, top_ten: bool) -> str:
 
     return f"{rank_prefix}{player['NAME']}|{player['MINUTES']} mins|{stat_line}|\n"
 
-def top_10_report(players, date: str) -> str:
+def bottom_10_report(players, date: str) -> str:
     """
     Generates a formatted string for the top 10 performing players of the night with their stats.
 
@@ -77,7 +77,7 @@ def top_10_report(players, date: str) -> str:
 
     # Create the report as a single formatted string
     report = (
-        f"Hello r/fantasybball! Here are the top 10 performing players for {date}!\n\n"
+        f"Hello r/fantasybball! Here are the bottom 10 performing players for {date}...\n\n"
         "|Rank|Player|Time|FG|FT|3PT|REB|AST|STL|BLK|TOV|PTS|BM Value|ESPN Score|\n"
         "|:-|:-|:-|:-|:-|:-|:-|:-|:-|:-|:-|:-|:-|:-|\n" +
         "".join(insert_player(index, player, True) for index, player in players.iloc[:10].iterrows())
@@ -90,9 +90,7 @@ def top_10_report(players, date: str) -> str:
         f"*Honorable Mentions*: {honorable_mentions}\n\n"
         "# FAQ\n\n"
         "* **How are players ranked?**\n\n"
-        "We directly use [Basketball Monster's rankings](https://basketballmonster.com/) for daily leaders (which is based off of their 9cat value system).\n\n"
-        "* **Why is [insert player] not ranked here? They had a great game!**\n\n"
-        "It doesn't mean that this player didn't perform well, it just means that some players had a more balanced performance than them. As stated before, we directly use Basketball Monster's rankings which calculates value based on a 9cat system.\n\n"
+        "We directly use [Basketball Monster's rankings](https://basketballmonster.com/) for daily leaders (which is based off of their 9cat value system). For worst performers of the night, a player must play at a minimum 24 minutes to make the list.\n\n"
         "* **Some exciting news, bot is almost up! Posts will follow the same format but will include some additional things!**\n\n"
         "Please continue to leave suggestions in the comments on what you want to see!"
     )
@@ -104,8 +102,8 @@ def main():
     server = 'http://10.24.162.43:4444'
     driver = parserV2.start_remote_server(server)
     players = parserV2.get_stats(driver)
-    top = parserV2.rank(players, False)
-    report = top_10_report(top, today())
+    bottom = parserV2.rank(players, True)
+    report = bottom_10_report(bottom, today())
     print(report)
 
     ''' # Getting env variables
