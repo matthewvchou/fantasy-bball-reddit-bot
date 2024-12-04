@@ -2,7 +2,7 @@ import os
 import pandas as pd
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
-import parserV2
+import daily_parser
 import praw
 
 def today() -> str:
@@ -97,6 +97,7 @@ def top_10_report(players, date: str) -> str:
         "Please continue to leave suggestions in the comments on what you want to see!"
     )
 
+    # Creating title for post
     title = f"🔥🚀 Top 10 Player Discussion - {players.iloc[0]['NAME']} Night 🚀🔥 - {date}"
 
     return title, report
@@ -112,20 +113,25 @@ def post(post_title: str, body: str):
     )
     
     # Define Subreddit
-    subreddit_name = 'bballfanalyst'
+    # subreddit_name = 'bballfanalyst'
+    subreddit_name = 'fantasybball'
     subreddit = reddit.subreddit(subreddit_name)
-    
+
+    # Find "Discussion" Flair ID
+    choices = list(subreddit.flair.link_templates.user_selectable())
+    template_id = next(x for x in choices if x["flair_text"] == "Discussion")["flair_template_id"]
+
     # Make Submission
-    submission = subreddit.submit(title=post_title, selftext=body)
-    print(f"Post Created: {submission.url}")
+    submission = subreddit.submit(title=post_title, selftext=body, flair_id=template_id)
+    # submission = subreddit.submit(title=post_title, selftext=body)
     
 
 def main():
 
-    server = 'http://10.24.143.239:4444'
-    driver = parserV2.start_remote_server(server)
-    players = parserV2.get_stats(driver)
-    title, top10 = top_10_report(parserV2.rank(players, False), today())
+    server = 'http://127.0.0.1:4444'
+    driver = daily_parser.start_remote_server(server)
+    players = daily_parser.get_stats(driver)
+    title, top10 = top_10_report(daily_parser.rank(players, False), today())
 
     # Getting env variables
     load_dotenv()

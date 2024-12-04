@@ -70,10 +70,8 @@ def main():
     server = 'http://10.31.176.65:4444'
     driver = start_remote_server(server)
     players = get_stats(driver)
-    bottom = rank(players, True)
-    top = rank(players, False)
-    print(top)
-    print(bottom)
+    # bottom = rank(players, True)
+    # top = rank(players, False)
     
 
 if __name__ == '__main__':
