@@ -26,7 +26,7 @@ def today() -> str:
 
 def insert_player(index, player, top_ten: bool) -> str:
     """
-    Inserts a player's data into a formatted row with emojis for exceeding stat thresholds, handling division by zero.
+    Inserts a player's data into a formatted row with emojis for exceeding stat thresholds.
 
     :param index: The rank of the player (0-indexed, so add 1 for display).
     :param player: A dictionary containing player stats.
@@ -35,8 +35,8 @@ def insert_player(index, player, top_ten: bool) -> str:
     """
     # Threshold values and corresponding emoji
     emojis = {
-        'FG_PCT': '🚀🚀' if player['FG_AT'] >= 20 and (player['FG_MADE'] / player['FG_AT']) >= 0.8 else '🚀🔥' if player['FG_AT'] >= 17 and (player['FG_MADE'] / player['FG_AT']) >= 0.7 else '🔥🔥' if player['FG_AT'] >= 15 and (player['FG_MADE'] / player['FG_AT']) >= 0.65 else '🔥' if player['FG_AT'] >= 13 and (player['FG_MADE'] / player['FG_AT']) >= 0.65 else '💩💩' if player['FG_AT'] >= 20 and (player['FG_MADE'] / player['FG_AT']) <= 0.2 else '💩🥶' if player['FG_AT'] >= 15 and (player['FG_MADE'] / player['FG_AT']) <= 0.3 else '🥶🥶' if player['FG_AT'] >= 12 and (player['FG_MADE'] / player['FG_AT']) <= 0.2 else '🥶' if player['FG_AT'] >= 9 and (player['FG_MADE'] / player['FG_AT']) <= 0.3 else '',
-        'FT_PCT': '🚀🚀' if player['FT_AT'] >= 15 and (player['FT_MADE'] / player['FT_AT']) == 1 else '🚀🔥' if player['FT_AT'] >= 12 and (player['FT_MADE'] / player['FT_AT']) >= 0.9 else '🔥🔥' if player['FT_AT'] >= 10 and (player['FT_MADE'] / player['FT_AT']) >= 0.9 else '🔥' if player['FT_AT'] >= 9 and (player['FT_MADE'] / player['FT_AT']) >= 0.8 else '💩💩' if player['FT_AT'] >= 15 and (player['FT_MADE'] / player['FT_AT']) <= 0.35 else '💩🥶' if player['FT_AT'] >= 12 and (player['FT_MADE'] / player['FT_AT']) <= 0.4 else '🥶🥶' if player['FT_AT'] >= 10 and (player['FT_MADE'] / player['FT_AT']) <= 0.35 else '🥶' if player['FT_AT'] >= 8 and (player['FT_MADE'] / player['FT_AT']) <= 0.4 else '',
+        #'FG_PCT': '🚀🚀' if player['FG_AT'] >= 20 and (player['FG_MADE'] / player['FG_AT']) >= 0.8 else '🚀🔥' if player['FG_AT'] >= 17 and (player['FG_MADE'] / player['FG_AT']) >= 0.7 else '🔥🔥' if player['FG_AT'] >= 15 and (player['FG_MADE'] / player['FG_AT']) >= 0.65 else '🔥' if player['FG_AT'] >= 13 and (player['FG_MADE'] / player['FG_AT']) >= 0.65 else '💩💩' if player['FG_AT'] >= 20 and (player['FG_MADE'] / player['FG_AT']) <= 0.2 else '💩🥶' if player['FG_AT'] >= 15 and (player['FG_MADE'] / player['FG_AT']) <= 0.3 else '🥶🥶' if player['FG_AT'] >= 12 and (player['FG_MADE'] / player['FG_AT']) <= 0.2 else '🥶' if player['FG_AT'] >= 9 and (player['FG_MADE'] / player['FG_AT']) <= 0.3 else '',
+        #'FT_PCT': '🚀🚀' if player['FT_AT'] >= 15 and (player['FT_MADE'] / player['FT_AT']) == 1 else '🚀🔥' if player['FT_AT'] >= 12 and (player['FT_MADE'] / player['FT_AT']) >= 0.9 else '🔥🔥' if player['FT_AT'] >= 10 and (player['FT_MADE'] / player['FT_AT']) >= 0.9 else '🔥' if player['FT_AT'] >= 9 and (player['FT_MADE'] / player['FT_AT']) >= 0.8 else '💩💩' if player['FT_AT'] >= 15 and (player['FT_MADE'] / player['FT_AT']) <= 0.35 else '💩🥶' if player['FT_AT'] >= 12 and (player['FT_MADE'] / player['FT_AT']) <= 0.4 else '🥶🥶' if player['FT_AT'] >= 10 and (player['FT_MADE'] / player['FT_AT']) <= 0.35 else '🥶' if player['FT_AT'] >= 8 and (player['FT_MADE'] / player['FT_AT']) <= 0.4 else '',
         '3P_MADE': '🚀🚀' if player['3P_MADE'] >= 12 else '🚀🔥' if player['3P_MADE'] >= 9 else '🔥🔥' if player['3P_MADE'] >= 7 else '🔥' if player['3P_MADE'] >= 5 else '',
         'RB': '🚀🚀' if player['RB'] >= 18 else '🚀🔥' if player['RB'] >= 16 else '🔥🔥' if player['RB'] >= 14 else '🔥' if player['RB'] >= 12 else '',
         'AST': '🚀🚀' if player['AST'] >= 16 else '🚀🔥' if player['AST'] >= 14 else '🔥🔥' if player['AST'] >= 12 else '🔥' if player['AST'] >= 10 else '',
@@ -49,8 +49,10 @@ def insert_player(index, player, top_ten: bool) -> str:
 
     # Generate stats string with emojis where applicable
     stat_line = (
-        f"{player['FG_MADE']}-{player['FG_AT']}{emojis['FG_PCT']}|"
-        f"{player['FT_MADE']}-{player['FT_AT']}{emojis['FT_PCT']}|"
+        #f"{player['FG_MADE']}-{player['FG_AT']}{emojis['FG_PCT']}|"
+        #f"{player['FT_MADE']}-{player['FT_AT']}{emojis['FT_PCT']}|"
+        f"{player['FG_MADE']}-{player['FG_AT']}|"
+        f"{player['FT_MADE']}-{player['FT_AT']}|"
         f"{player['3P_MADE']}{emojis['3P_MADE']}|"
         f"{player['RB']}{emojis['RB']}|"
         f"{player['AST']}{emojis['AST']}|"
@@ -93,8 +95,6 @@ def top_10_report(players, date: str) -> str:
         "We directly use [Basketball Monster's rankings](https://basketballmonster.com/) for daily leaders (which is based off of their 9cat value system).\n\n"
         "* **Why is [insert player] not ranked here? They had a great game!**\n\n"
         "It doesn't mean that this player didn't perform well, it just means that some players had a more balanced performance than them. As stated before, we directly use Basketball Monster's rankings which calculates value based on a 9cat system.\n\n"
-        "* **Some exciting news, bot is almost up! Posts will follow the same format but will include some additional things!**\n\n"
-        "Please continue to leave suggestions in the comments on what you want to see!"
     )
 
     # Creating title for post
