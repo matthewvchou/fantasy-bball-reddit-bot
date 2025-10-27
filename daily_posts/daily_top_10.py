@@ -131,6 +131,7 @@ def main():
     server = 'http://127.0.0.1:4444'
     driver = daily_parser.start_remote_server(server)
     players = daily_parser.get_stats(driver)
+    print(players)
     title, top10 = top_10_report(daily_parser.rank(players, False), today())
 
     # Getting env variables
