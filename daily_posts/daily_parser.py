@@ -36,7 +36,7 @@ def get_stats(driver):
         if not len(stats_raw):
             continue
         player_stats = {}
-        player_stats['NAME'] = stats_raw[3].text.strip()
+        player_stats['NAME'] = stats_raw[3].text.strip().removesuffix("fouls").strip()
         player_stats['BM_VAL'] = float(stats_raw[2].text.strip())
         player_stats['MINUTES'] = float(stats_raw[5].text.strip())
         fg_pct = float(stats_raw[12].text.strip())
