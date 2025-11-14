@@ -19,7 +19,7 @@ echo "Selenium server started with PID: $SELENIUM_PID"
 sleep 5
 
 # SCRIPT GOES HERE
-/Users/matthewvchou/fantasy-bball-reddit-bot/venv/bin/python /Users/matthewvchou/fantasy-bball-reddit-bot/season_stats/season_stats.py
+/Users/matthewvchou/fantasy-bball-reddit-bot/venv/bin/python /Users/matthewvchou/fantasy-bball-reddit-bot/src/scraping/basketball_monster_scraper.py
 
 # Check if the Selenium server is still running and force kill if necessary
 if ps -p $SELENIUM_PID > /dev/null; then
