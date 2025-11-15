@@ -1,22 +1,25 @@
 #!../venv/bin/python3.11
 
-import requests
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import Select
-from time import sleep
-from dotenv import load_dotenv
-from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 import pandas as pd
 
-def start_remote_server(server: str):
+def start_remote_server(server: str, daily: bool):
     # Start driver
     options = webdriver.ChromeOptions()
     driver = webdriver.Remote(command_executor=server, options=options)
 
-    # Go to Basketball Monster Webpage
+    # Go to Basketball Monster Stats Webpage
     driver.get('https://basketballmonster.com/playerrankings.aspx')
+    
+    # Check if daily scrape or for season
+    if daily:
+        # Select 'Past Days' -> automatically goes to the past 1 day
+        selection = driver.find_element(By.NAME, 'DateFilterControl')
+        select = Select(selection)
+        select.select_by_visible_text('Past Days')
 
     return driver
 
@@ -35,11 +38,12 @@ def scrape_stats(driver):
     driver.quit()
     return pd.DataFrame(players)
 
-def create_player_stats_row(stats_raw):
+def create_player_stats_row(stats_raw: list, daily: bool):
     player_stats = {}
-    if len(stats_raw) == 28:
-        adjustment = 0
-    elif len(stats_raw) == 29:
+    adjustment = 0
+    #if len(stats_raw) == 28:
+    #    adjustment = 0
+    if len(stats_raw) == 29:
         adjustment = 1
     player_stats['NAME'] = stats_raw[3].text.strip().removesuffix("fouls").strip()
     player_stats['POSITION'] = stats_raw[4].text.strip()
@@ -58,15 +62,31 @@ def create_player_stats_row(stats_raw):
     player_stats['BLK'] = float(stats_raw[12 + adjustment].text.strip())
     player_stats['TOV'] = float(stats_raw[17 + adjustment].text.strip())
     player_stats['PTS'] = float(stats_raw[7 + adjustment].text.strip())
+    player_stats['ESPN'] = espn_score(player_stats)
     return player_stats
+
+def daily_round(player_stats: dict):
+    round(player_stats['FG_AT'])
+    round(player_stats['FG_MADE'])
+    round(player_stats['FT_AT'])
+    round(player_stats['FT_MADE'])
+    round(player_stats[''])
+
+def espn_score(player: dict) -> int:
+    return player['PTS'] + player['3P_MADE'] - player['FG_AT'] + (2 * player['FG_MADE']) - player['FT_AT'] + player['FT_MADE'] + player['RB'] + (2 * player['AST']) + (4 * player['STL']) + (4 * player['BLK']) - (2 * player['TOV'])
 
 def main():
     server = 'http://127.0.0.1:4444'
-    driver = start_remote_server(server)
-    players = scrape_stats(driver)
-    print(players)
-    # bottom = rank(players, True)
-    # top = rank(players, False)
+
+    # Season Stats Test
+    driver = start_remote_server(server, False)
+    season_stats = scrape_stats(driver, False)
+    print(season_stats)
+    
+    # Daily Stats Test
+    driver = start_remote_server(server, True)
+    daily_stats = scrape_stats(driver, True)
+    print(daily_stats)
 
 if __name__ == '__main__':
     main()
