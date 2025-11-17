@@ -14,7 +14,7 @@ def start_remote_server(server: str, daily: bool):
     # Go to Basketball Monster Stats Webpage
     driver.get('https://basketballmonster.com/playerrankings.aspx')
     
-    # Check if daily scrape or for season
+    # Check if scraping for daily or season stats
     if daily:
         # Select 'Past Days' -> automatically goes to the past 1 day
         selection = driver.find_element(By.NAME, 'DateFilterControl')
@@ -23,7 +23,7 @@ def start_remote_server(server: str, daily: bool):
 
     return driver
 
-def scrape_stats(driver):
+def scrape_stats(driver, daily: bool):
     # Get HTML to pass into 
     html = driver.page_source
     soup = BeautifulSoup(html, features="html.parser")
@@ -33,18 +33,19 @@ def scrape_stats(driver):
         stats_raw = row.find_all('td', class_=['tdr', 'tdl', 'tdc nowrap'])
         if not len(stats_raw):
             continue
-        player_stats = create_player_stats_row(stats_raw)
+        player_stats = create_player_stats_row(stats_raw, daily)
         players.append(player_stats)
     driver.quit()
     return pd.DataFrame(players)
 
 def create_player_stats_row(stats_raw: list, daily: bool):
     player_stats = {}
+
+    # Adjusting for injuries column that only exists if a player has an injury designation
     adjustment = 0
-    #if len(stats_raw) == 28:
-    #    adjustment = 0
     if len(stats_raw) == 29:
         adjustment = 1
+
     player_stats['NAME'] = stats_raw[3].text.strip().removesuffix("fouls").strip()
     player_stats['POSITION'] = stats_raw[4].text.strip()
     player_stats['BM_VAL'] = float(stats_raw[2].text.strip())
@@ -63,14 +64,25 @@ def create_player_stats_row(stats_raw: list, daily: bool):
     player_stats['TOV'] = float(stats_raw[17 + adjustment].text.strip())
     player_stats['PTS'] = float(stats_raw[7 + adjustment].text.strip())
     player_stats['ESPN'] = espn_score(player_stats)
+
+    if daily: # Need to round stats if it is a daily scrape
+        daily_round(player_stats)
+
     return player_stats
 
 def daily_round(player_stats: dict):
-    round(player_stats['FG_AT'])
-    round(player_stats['FG_MADE'])
-    round(player_stats['FT_AT'])
-    round(player_stats['FT_MADE'])
-    round(player_stats[''])
+    player_stats['FG_AT'] = int(round(player_stats['FG_AT']))
+    player_stats['FG_MADE'] = int(round(player_stats['FG_MADE']))
+    player_stats['FT_AT'] = int(round(player_stats['FT_AT']))
+    player_stats['FT_MADE'] = int(round(player_stats['FT_MADE']))
+    player_stats['3P_MADE'] = int(round(player_stats['3P_MADE']))
+    player_stats['RB'] = int(round(player_stats['RB']))
+    player_stats['AST'] = int(round(player_stats['AST']))
+    player_stats['STL'] = int(round(player_stats['STL']))
+    player_stats['BLK'] = int(round(player_stats['BLK']))
+    player_stats['TOV'] = int(round(player_stats['TOV']))
+    player_stats['PTS'] = int(round(player_stats['PTS']))
+    player_stats['ESPN'] = int(round(player_stats['ESPN']))
 
 def espn_score(player: dict) -> int:
     return player['PTS'] + player['3P_MADE'] - player['FG_AT'] + (2 * player['FG_MADE']) - player['FT_AT'] + player['FT_MADE'] + player['RB'] + (2 * player['AST']) + (4 * player['STL']) + (4 * player['BLK']) - (2 * player['TOV'])
