@@ -87,6 +87,12 @@ def daily_round(player_stats: dict):
 def espn_score(player: dict) -> int:
     return player['PTS'] + player['3P_MADE'] - player['FG_AT'] + (2 * player['FG_MADE']) - player['FT_AT'] + player['FT_MADE'] + player['RB'] + (2 * player['AST']) + (4 * player['STL']) + (4 * player['BLK']) - (2 * player['TOV'])
 
+def rank_ascending(players, ascend: bool):
+    if ascend:
+        return players[players['MINUTES'] >= 24].sort_values(by='BM_VAL', ascending=ascend)
+    else:
+        return players.sort_values(by='BM_VAL', ascending=ascend)
+
 def main():
     server = 'http://127.0.0.1:4444'
 
