@@ -2,7 +2,7 @@ import os
 import pandas as pd
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
-from scraping import basketball_monster_scraper
+from ...scraping.basketball_monster_scraper import start_remote_server, scrape_stats, rank_ascending
 import praw
 
 def today() -> str:
@@ -130,10 +130,10 @@ def main():
     server = 'http://127.0.0.1:4444'
 
     # Scraping Stats
-    driver = basketball_monster_scraper.start_remote_server(server, True)
-    players = basketball_monster_scraper.get_stats(driver)
+    driver = start_remote_server(server, True)
+    players = scrape_stats(driver, True)
     print(players)
-    title, top10 = top_10_report(basketball_monster_scraper.rank_ascending(players, False), today())
+    title, top10 = top_10_report(rank_ascending(players, False), today())
 
     # Getting env variables
     load_dotenv()
