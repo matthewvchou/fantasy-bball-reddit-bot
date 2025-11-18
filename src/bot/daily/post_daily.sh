@@ -19,7 +19,7 @@ echo "Selenium server started with PID: $SELENIUM_PID"
 sleep 5
 
 # Run the Python script
-cd "$(dirname "$0")/../../.."   # hop to repo root
+cd "$(dirname "$0")/../../.."   # Go to repo root
 export PYTHONPATH="$PWD"
 exec venv/bin/python -m src.bot.daily.daily_top_ten
 
