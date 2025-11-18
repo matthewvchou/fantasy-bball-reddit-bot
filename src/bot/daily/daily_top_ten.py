@@ -102,7 +102,7 @@ def top_10_report(players, date: str) -> str:
 
     return title, report
 
-def post(post_title: str, body: str):
+def post(post_title: str, body: str, real: bool):
     # Configuring Bot
     reddit = praw.Reddit(
         client_id = os.getenv('MY_ID'),
@@ -111,20 +111,19 @@ def post(post_title: str, body: str):
         user_agent = "Daily Top 10 Player Post Bot for r/fantasybball",
         username = os.getenv('MY_USERNAME'),
     )
-    
-    # Define Subreddit
-    subreddit_name = 'bballfanalyst'
-    # subreddit_name = 'fantasybball'
-    subreddit = reddit.subreddit(subreddit_name)
 
-    # Find "Discussion" Flair ID
-    # choices = list(subreddit.flair.link_templates.user_selectable())
-    # template_id = next(x for x in choices if x["flair_text"] == "Discussion")["flair_template_id"]
-
-    # Make Submission
-    # submission = subreddit.submit(title=post_title, selftext=body, flair_id=template_id)
-    submission = subreddit.submit(title=post_title, selftext=body)
-    
+    if real:
+        # Real Subreddit Post
+        subreddit_name = 'fantasybball'
+        subreddit = reddit.subreddit(subreddit_name)
+        choices = list(subreddit.flair.link_templates.user_selectable())
+        template_id = next(x for x in choices if x["flair_text"] == "Discussion")["flair_template_id"]
+        submission = subreddit.submit(title=post_title, selftext=body, flair_id=template_id)
+    else:
+        # Testing Subreddit Post
+        subreddit_name = 'bballfanalyst'
+        subreddit = reddit.subreddit(subreddit_name)
+        submission = subreddit.submit(title=post_title, selftext=body)
 
 def main():
     server = 'http://127.0.0.1:4444'
@@ -139,7 +138,7 @@ def main():
     load_dotenv()
 
     # Making Post
-    post(title, top10)
+    post(title, top10, False)
 
 
 if __name__ == '__main__':
