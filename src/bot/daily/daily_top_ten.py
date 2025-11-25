@@ -138,7 +138,7 @@ def main():
     load_dotenv()
 
     # Making Post
-    post(title, top10, False)
+    post(title, top10, True)
 
 
 if __name__ == '__main__':
