@@ -137,8 +137,11 @@ def main():
     # Getting env variables
     load_dotenv()
 
-    # Making Post
+    # Real Post
     post(title, top10, True)
+
+    # Test Post
+    # post(title, top10, False)
 
 
 if __name__ == '__main__':

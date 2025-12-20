@@ -21,12 +21,10 @@ sleep 5
 # Run the Python script
 cd "$(dirname "$0")/../../.."   # Go to repo root
 export PYTHONPATH="$PWD"
-exec venv/bin/python -m src.bot.daily.daily_top_ten
+venv/bin/python -m src.bot.daily.daily_top_ten
 
-# Check if the Selenium server is still running and force kill if necessary
-if ps -p $SELENIUM_PID > /dev/null; then
-  echo "Graceful shutdown failed, killing Selenium process (PID: $SELENIUM_PID)..."
-  kill -9 $SELENIUM_PID
-fi
+# Kill Selenium Server
+echo "Killing Selenium server (PID: $SELENIUM_PID)..."
+kill -9 $SELENIUM_PID
 
 echo "Script completed."
