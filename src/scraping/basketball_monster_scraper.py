@@ -90,6 +90,21 @@ def rank_ascending(players, ascend: bool):
         return players[players['MINUTES'] >= 24].sort_values(by='BM_VAL', ascending=ascend)
     else:
         return players.sort_values(by='BM_VAL', ascending=ascend)
+    
+def get_season_averages(season_stats):
+    stat_columns = season_stats.select_dtypes("number").drop(columns=['BM_VAL', 'MINUTES', 'ESPN']).columns
+
+    # Stat Means
+    season_means_by_position = (
+        season_stats.groupby('POSITION')[stat_columns].mean()
+    )
+
+    # Stat Standard Deviations
+    season_stds_by_position = (
+        season_stats.groupby('POSITION')[stat_columns].std()
+    )
+    
+    return season_means_by_position, season_stds_by_position
 
 def main():
     server = 'http://127.0.0.1:4444'
@@ -97,12 +112,14 @@ def main():
     # Season Stats Test
     driver = start_remote_server(server, False)
     season_stats = scrape_stats(driver, False)
-    print(season_stats)
+    season_means, season_stds = get_season_averages(season_stats)
+    print(season_means)
+    print(season_stds)
     
     # Daily Stats Test
-    driver = start_remote_server(server, True)
-    daily_stats = scrape_stats(driver, True)
-    print(daily_stats)
+    # driver = start_remote_server(server, True)
+    # daily_stats = scrape_stats(driver, True)
+    # print(daily_stats)
 
 if __name__ == '__main__':
     main()
