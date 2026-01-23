@@ -106,6 +106,22 @@ def get_season_averages(season_stats):
     
     return season_means_by_position, season_stds_by_position
 
+def player_z_scores_weighted(season_means, season_stds, daily_stats):
+    z_scores_df = daily_stats[['NAME', 'POSITION']].copy()
+    
+    stat_columns = season_means.columns
+    
+    for stat in stat_columns:
+        z_scores_df[f'{stat}_Z'] = daily_stats.apply(
+            lambda row: (row[stat] - season_means.loc[row['POSITION'], stat]) / 
+                       (season_stds.loc[row['POSITION'], stat] + 1e-10)
+            if row['POSITION'] in season_means.index else 0,
+            axis=1
+        )
+    
+    return z_scores_df
+
+
 def main():
     server = 'http://127.0.0.1:4444'
 
@@ -117,9 +133,12 @@ def main():
     print(season_stds)
     
     # Daily Stats Test
-    # driver = start_remote_server(server, True)
-    # daily_stats = scrape_stats(driver, True)
-    # print(daily_stats)
+    driver = start_remote_server(server, True)
+    daily_stats = scrape_stats(driver, True)
+    print(daily_stats)
+
+    player_z_scores_weighted_df = player_z_scores_weighted(season_means, season_stds, daily_stats)
+    print(player_z_scores_weighted_df)
 
 if __name__ == '__main__':
     main()
