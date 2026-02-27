@@ -1,24 +1,39 @@
 from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import Select
+from selenium.webdriver.support.ui import Select, WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from bs4 import BeautifulSoup
+from webdriver_manager.chrome import ChromeDriverManager
 import pandas as pd
 import numpy as np
 
-def start_remote_server(server: str, daily: bool):
-    # Start driver
+def start_driver(daily: bool):
     options = webdriver.ChromeOptions()
-    driver = webdriver.Remote(command_executor=server, options=options)
+    options.add_argument("--headless")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
     # Go to Basketball Monster Stats Webpage
     driver.get('https://basketballmonster.com/playerrankings.aspx')
-    
+
+    # Wait for the player table to load
+    WebDriverWait(driver, 20).until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, 'td.tdr, td.tdl'))
+    )
+
     # Check if scraping for daily or season stats
     if daily:
         # Select 'Past Days' -> automatically goes to the past 1 day
         selection = driver.find_element(By.NAME, 'DateFilterControl')
         select = Select(selection)
         select.select_by_visible_text('Past Days')
+
+        # Wait for the table to refresh with daily data
+        WebDriverWait(driver, 20).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, 'td.tdr, td.tdl'))
+        )
 
     return driver
 
@@ -208,17 +223,15 @@ def player_z_scores_weighted(season_means, season_stds, daily_stats, fg_impact_m
 
 
 def main():
-    server = 'http://127.0.0.1:4444'
-
     # Season Stats Test
-    driver = start_remote_server(server, False)
+    driver = start_driver(False)
     season_stats = scrape_stats(driver, False)
     season_means, season_stds, fg_impact_means, fg_impact_stds, ft_impact_means, ft_impact_stds = get_season_averages(season_stats)
     print(season_means)
     print(season_stds)
 
     # Daily Stats Test
-    driver = start_remote_server(server, True)
+    driver = start_driver(True)
     daily_stats = scrape_stats(driver, True)
     print(daily_stats.head(10))
 
