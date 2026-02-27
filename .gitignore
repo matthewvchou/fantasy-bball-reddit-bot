@@ -1,4 +1,7 @@
 .env
 venv
+src/scraping/scrapenew
+src/scraping/daily_stats.txt
+src/scraping/z_scores.txt
 .DS_Store
 __pycache__/

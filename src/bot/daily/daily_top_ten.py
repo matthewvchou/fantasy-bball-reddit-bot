@@ -2,7 +2,7 @@ import os
 import pandas as pd
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
-from ...scraping.basketball_monster_scraper import start_remote_server, scrape_stats, rank_ascending
+from ...scraping.basketball_monster_scraper import start_driver, scrape_stats, rank_ascending
 import praw
 
 def today() -> str:
@@ -126,10 +126,8 @@ def post(post_title: str, body: str, real: bool):
         submission = subreddit.submit(title=post_title, selftext=body)
 
 def main():
-    server = 'http://127.0.0.1:4444'
-
     # Scraping Stats
-    driver = start_remote_server(server, True)
+    driver = start_driver(True)
     players = scrape_stats(driver, True)
     print(players)
     title, top10 = top_10_report(rank_ascending(players, False), today())
