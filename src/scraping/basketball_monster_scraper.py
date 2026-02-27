@@ -7,13 +7,24 @@ from bs4 import BeautifulSoup
 from webdriver_manager.chrome import ChromeDriverManager
 import pandas as pd
 import numpy as np
+import os
 
 def start_driver(daily: bool):
     options = webdriver.ChromeOptions()
     options.add_argument("--headless")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+
+    # In Docker (Azure), CHROME_BIN and CHROMEDRIVER_PATH are set to system Chromium.
+    # Locally, webdriver-manager downloads the matching ChromeDriver.
+    chrome_bin = os.getenv('CHROME_BIN')
+    chromedriver_path = os.getenv('CHROMEDRIVER_PATH')
+
+    if chrome_bin:
+        options.binary_location = chrome_bin
+
+    service = Service(chromedriver_path) if chromedriver_path else Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service, options=options)
 
     # Go to Basketball Monster Stats Webpage
     driver.get('https://basketballmonster.com/playerrankings.aspx')
