@@ -2,7 +2,7 @@ import os
 import pandas as pd
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
-from ...scraping.basketball_monster_scraper import start_driver, scrape_stats, rank_ascending
+from basketball_monster_scraper import start_driver, scrape_stats, rank_ascending
 import praw
 
 def today() -> str:
