@@ -1,4 +1,9 @@
 #!/bin/bash
+# EMERGENCY BACKUP: runs the Basketball Monster Selenium scraper only (no Reddit post).
+# Prints season means/stds, today's daily stats, and z-scores.
+
+# Path to the Selenium standalone server jar (override with SELENIUM_JAR=...)
+SELENIUM_JAR="${SELENIUM_JAR:-/Users/matthewvchou/Downloads/selenium-server-4.25.0.jar}"
 
 # Kill any process currently using port 4444
 PORT=4444
@@ -11,15 +16,16 @@ else
 fi
 
 # Start Selenium server
-java -jar /Users/matthewvchou/Downloads/selenium-server-4.25.0.jar standalone --host 127.0.0.1 --port 4444 &
+java -jar "$SELENIUM_JAR" standalone --host 127.0.0.1 --port 4444 &
 SELENIUM_PID=$!  # Capture the process ID of the Java process
 echo "Selenium server started with PID: $SELENIUM_PID"
 
 # Wait for the Selenium server to initialize
 sleep 5
 
-# SCRIPT GOES HERE
-/Users/matthewvchou/fantasy-bball-reddit-bot/venv/bin/python /Users/matthewvchou/fantasy-bball-reddit-bot/src/scraping/basketball_monster_scraper.py
+OLD_SRC="$(cd "$(dirname "$0")" && pwd)"
+cd "$OLD_SRC"
+"$OLD_SRC/../venv/bin/python" basketball_monster_scraper.py
 
 # Check if the Selenium server is still running and force kill if necessary
 if ps -p $SELENIUM_PID > /dev/null; then
