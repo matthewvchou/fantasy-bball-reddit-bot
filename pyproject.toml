@@ -1,0 +1,31 @@
+[project]
+name = "fantasy-bball-reddit-bot"
+version = "0.1.0"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "beautifulsoup4>=4.15.0",
+    "nba-api>=1.12.0",
+    "numpy>=2.4.6",
+    "pandas>=3.1.0",
+    "praw>=8.0.3",
+    "python-dotenv>=1.2.4",
+    "pytz>=2026.6",
+    "requests>=2.34.2",
+    "selenium>=4.52.0",
+    "webdriver-manager>=4.1.2",
+]
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "mypy>=2.4.1",
+    "pandas-stubs>=3.1.0.261029",
+    "types-pytz>=2026.6.0.20261031",
+    "types-requests>=2.33.0.20261030",
+]
+
+[[tool.mypy.overrides]]
+module = "nba_api.*"
+ignore_missing_imports = true
