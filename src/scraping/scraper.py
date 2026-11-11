@@ -1,4 +1,4 @@
-from nba_api.stats.endpoints import leaguegamefinder, scoreboardv2, boxscoretraditionalv3
+from nba_api.stats.endpoints import leaguegamefinder, scoreboardv3, boxscoretraditionalv3
 import pandas as pd
 from datetime import datetime, timedelta
 import time
@@ -74,6 +74,7 @@ def get_player_stats_for_game(game_id: str):
             if not s['minutes'] or s['minutes'] == '0:00':
                 continue
             rows.append({
+                'PLAYER_ID': player['personId'],
                 'PLAYER_NAME': f"{player['firstName']} {player['familyName']}",
                 'TEAM_ABBREVIATION': team_abbr,
                 'MIN': s['minutes'],
@@ -118,12 +119,12 @@ def get_all_player_stats_for_date(date_str: str):
 
     all_player_stats = []
 
-    scoreboard = scoreboardv2.ScoreboardV2(game_date=date_str)
-    scoreboard_df = scoreboard.get_data_frames()[0]
+    scoreboard = scoreboardv3.ScoreboardV3(game_date=date_str)
+    scoreboard_df = scoreboard.game_header.get_data_frame()
 
     for i, game_id in enumerate(game_ids, 1):
         print(f"Fetching game {i}/{len(game_ids)}: {game_id}")
-        status_rows = scoreboard_df[scoreboard_df['GAME_ID'] == game_id]['GAME_STATUS_TEXT'].values
+        status_rows = scoreboard_df[scoreboard_df['gameId'] == game_id]['gameStatusText'].values
         if len(status_rows) > 0:
             print(f"Game Status: {status_rows[0]}")
         player_stats = get_player_stats_for_game(game_id)
@@ -151,6 +152,7 @@ def process_player_stats(df):
 
     # Select and rename relevant columns
     processed = df[[
+        'PLAYER_ID',
         'PLAYER_NAME',
         'TEAM_ABBREVIATION',
         'MIN',
