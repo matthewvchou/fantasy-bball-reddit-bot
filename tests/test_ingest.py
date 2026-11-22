@@ -20,6 +20,25 @@ class UnknownTypeSource(FixtureSource):
         return response
 
 
+class RecordingSource(FixtureSource):
+    """Records every fetch, and can fail the Regular Season stat line fetch to mimic an API error."""
+
+    def __init__(self, isFailingOnRegularSeasonStatLines: bool = False, error: BaseException | None = None) -> None:
+        self.fetches: list[tuple[str, str]] = []
+        self.isFailingOnRegularSeasonStatLines = isFailingOnRegularSeasonStatLines
+        self.error = error or ConnectionError("NBA API unreachable")
+
+    def fetchTeamGameLog(self, season: str, seasonType: str) -> dict[str, Any]:
+        self.fetches.append(("team", seasonType))
+        return super().fetchTeamGameLog(season, seasonType)
+
+    def fetchPlayerGameLog(self, season: str, seasonType: str) -> dict[str, Any]:
+        self.fetches.append(("player", seasonType))
+        if self.isFailingOnRegularSeasonStatLines and seasonType == "Regular Season":
+            raise self.error
+        return super().fetchPlayerGameLog(season, seasonType)
+
+
 class NonNbaTeamSource(FixtureSource):
     """Serves the 1970-71 fixtures with one team in game 0027000005 changed to a non-NBA team ID."""
 
@@ -168,3 +187,115 @@ def testSkipsStatLinesOfGamesAgainstNonNbaTeams(dbConnection: sqlite3.Connection
     # Without a stored game, its stat lines would be orphans.
     lineCount = dbConnection.execute("SELECT COUNT(*) FROM playerGame WHERE gameId = ?", ("0027000005",)).fetchone()[0]
     assert lineCount == 0
+
+
+def testRerunLeavesRowCountsUnchanged(dbConnection: sqlite3.Connection) -> None:
+    ingestSeason(FixtureSource(), dbConnection, "1970-71")
+    ingestSeason(FixtureSource(), dbConnection, "1970-71")
+
+    counts = dbConnection.execute("SELECT (SELECT COUNT(*) FROM game), (SELECT COUNT(*) FROM playerGame)").fetchone()
+    assert counts == (3, 65)
+
+
+def testLogsEachUnitWithItsKindStatusAndRowCount(dbConnection: sqlite3.Connection) -> None:
+    ingestSeason(FixtureSource(), dbConnection, "1970-71")
+
+    logRows = dbConnection.execute(
+        "SELECT kind, status, rowCount, finishedAt IS NOT NULL FROM ingestLog WHERE unitKey IN (?, ?)",
+        ("1970-71/Regular Season", "1970-71/Pre Season"),
+    ).fetchall()
+    # Three games plus 65 stat lines; Preseason has no games in 1970-71 but is still logged as done.
+    assert sorted(logRows) == [("seasonGameLog", "done", 0, 1), ("seasonGameLog", "done", 68, 1)]
+
+
+def testRefreshReplacesAFinishedUnitsRows(dbConnection: sqlite3.Connection) -> None:
+    ingestSeason(FixtureSource(), dbConnection, "1970-71")
+    dbConnection.execute("UPDATE game SET homeScore = 0 WHERE gameId = ?", ("0027000005",))
+    dbConnection.commit()
+
+    ingestSeason(FixtureSource(), dbConnection, "1970-71", shouldRefresh=True)
+
+    rows = dbConnection.execute(
+        "SELECT (SELECT homeScore FROM game WHERE gameId = ?), (SELECT COUNT(*) FROM game), (SELECT COUNT(*) FROM playerGame)",
+        ("0027000005",),
+    ).fetchone()
+    # The score is the source's again, and nothing was duplicated.
+    assert rows == (117, 3, 65)
+
+
+def testAFailedUnitLeavesNoPartialRowsAndStopsTheRun(dbConnection: sqlite3.Connection) -> None:
+    source = RecordingSource(isFailingOnRegularSeasonStatLines=True)
+
+    # The game rows are written before the stat line fetch fails, so they must be rolled back.
+    with pytest.raises(ConnectionError):
+        ingestSeason(source, dbConnection, "1970-71")
+
+    counts = dbConnection.execute("SELECT (SELECT COUNT(*) FROM game), (SELECT COUNT(*) FROM playerGame)").fetchone()
+    statuses = dict(dbConnection.execute("SELECT unitKey, status FROM ingestLog").fetchall())
+    assert counts == (0, 0)
+    assert statuses == {"1970-71/Pre Season": "done", "1970-71/Regular Season": "error"}
+    # The run stopped at the failure: Playoffs was never fetched.
+    assert ("team", "Playoffs") not in source.fetches
+
+
+def testARerunAfterAFailureSkipsFinishedUnitsAndCompletesTheRest(dbConnection: sqlite3.Connection) -> None:
+    with pytest.raises(ConnectionError):
+        ingestSeason(RecordingSource(isFailingOnRegularSeasonStatLines=True), dbConnection, "1970-71")
+
+    rerunSource = RecordingSource()
+    ingestSeason(rerunSource, dbConnection, "1970-71")
+
+    counts = dbConnection.execute("SELECT (SELECT COUNT(*) FROM game), (SELECT COUNT(*) FROM playerGame)").fetchone()
+    statuses = dict(dbConnection.execute("SELECT unitKey, status FROM ingestLog").fetchall())
+    assert counts == (3, 65)
+    assert set(statuses.values()) == {"done"}
+    # The Preseason unit finished before the failure, so the rerun never fetched it.
+    assert ("team", "Pre Season") not in rerunSource.fetches
+
+
+def testRefreshKeepsStatLinesTheGameLogDoesNotSupplyFrom1996On(dbConnection: sqlite3.Connection) -> None:
+    ingestSeason(FixtureSource(), dbConnection, "2023-24")
+    # Stand-in for a line the per-game box score loader wrote.
+    dbConnection.execute("INSERT INTO playerGame (gameId, playerId, teamId, minutes) VALUES (?, ?, ?, ?)", ("0022300061", 202704, 1610612743, 1440))
+    dbConnection.commit()
+
+    ingestSeason(FixtureSource(), dbConnection, "2023-24", shouldRefresh=True)
+
+    lineCount = dbConnection.execute("SELECT COUNT(*) FROM playerGame").fetchone()[0]
+    assert lineCount == 1
+
+
+def testAFailedRefreshLogsAnErrorButKeepsTheOldRows(dbConnection: sqlite3.Connection) -> None:
+    ingestSeason(FixtureSource(), dbConnection, "1970-71")
+
+    with pytest.raises(ConnectionError):
+        ingestSeason(RecordingSource(isFailingOnRegularSeasonStatLines=True), dbConnection, "1970-71", shouldRefresh=True)
+
+    # The rollback restored the old rows, so their count stays; only the status shows the run stopped here.
+    log = dbConnection.execute("SELECT status, rowCount FROM ingestLog WHERE unitKey = ?", ("1970-71/Regular Season",)).fetchone()
+    lineCount = dbConnection.execute("SELECT COUNT(*) FROM playerGame").fetchone()[0]
+    assert (log, lineCount) == (("error", 68), 65)
+
+
+def testAnUnfinishedRefreshIsFetchedAgainOnTheNextRun(dbConnection: sqlite3.Connection) -> None:
+    ingestSeason(FixtureSource(), dbConnection, "1970-71")
+    with pytest.raises(ConnectionError):
+        ingestSeason(RecordingSource(isFailingOnRegularSeasonStatLines=True), dbConnection, "1970-71", shouldRefresh=True)
+
+    nextRun = RecordingSource()
+    ingestSeason(nextRun, dbConnection, "1970-71")
+
+    status = dbConnection.execute("SELECT status FROM ingestLog WHERE unitKey = ?", ("1970-71/Regular Season",)).fetchone()[0]
+    assert ("team", "Regular Season") in nextRun.fetches
+    assert status == "done"
+
+
+def testAnInterruptedUnitLeavesNoPartialRows(dbConnection: sqlite3.Connection) -> None:
+    source = RecordingSource(isFailingOnRegularSeasonStatLines=True, error=KeyboardInterrupt())
+
+    with pytest.raises(KeyboardInterrupt):
+        ingestSeason(source, dbConnection, "1970-71")
+
+    gameCount = dbConnection.execute("SELECT COUNT(*) FROM game").fetchone()[0]
+    status = dbConnection.execute("SELECT status FROM ingestLog WHERE unitKey = ?", ("1970-71/Regular Season",)).fetchone()[0]
+    assert (gameCount, status) == (0, "interrupted")
