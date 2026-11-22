@@ -7,8 +7,8 @@ from src.ingest.ingest import ingestSeason
 from tests.fakesource import FixtureSource
 
 
-class PreseasonLabelledSource(FixtureSource):
-    """Serves the 2023-24 fixtures with one game ID changed to a Preseason (001) prefix."""
+class UnknownTypeSource(FixtureSource):
+    """Serves the 2023-24 fixtures with one game ID changed to a prefix that is not a Game Type."""
 
     def fetchTeamGameLog(self, season: str, seasonType: str) -> dict[str, Any]:
         response = super().fetchTeamGameLog(season, seasonType)
@@ -16,23 +16,48 @@ class PreseasonLabelledSource(FixtureSource):
         gameIdColumn = resultSet["headers"].index("GAME_ID")
         for row in resultSet["rowSet"]:
             if row[gameIdColumn] == "0022300061":
-                row[gameIdColumn] = "0012300061"
+                row[gameIdColumn] = "0092300061"
+        return response
+
+
+class NonNbaTeamSource(FixtureSource):
+    """Serves the 1970-71 fixtures with one team in game 0027000005 changed to a non-NBA team ID."""
+
+    def fetchTeamGameLog(self, season: str, seasonType: str) -> dict[str, Any]:
+        response = super().fetchTeamGameLog(season, seasonType)
+        if seasonType != "Regular Season":
+            return response
+        resultSet = response["resultSets"][0]
+        gameIdColumn = resultSet["headers"].index("GAME_ID")
+        teamIdColumn = resultSet["headers"].index("TEAM_ID")
+        for row in resultSet["rowSet"]:
+            if row[gameIdColumn] == "0027000005" and row[teamIdColumn] == 1610612765:
+                row[teamIdColumn] = 12315
         return response
 
 
 def testLoadsEveryPlayerStatLineFromTheSeason(dbConnection: sqlite3.Connection) -> None:
-    ingestSeason(FixtureSource(), dbConnection, "2023-24")
+    ingestSeason(FixtureSource(), dbConnection, "1970-71")
 
     lineCount = dbConnection.execute("SELECT COUNT(*) FROM playerGame").fetchone()[0]
-    assert lineCount == 69
+    assert lineCount == 65
 
-    # Reggie Jackson, Denver vs. the Lakers on 2023-10-24
+    # Bob Lanier, Detroit at Seattle on 1970-10-14
     statLine = dbConnection.execute(
-        "SELECT teamId, fgm, fga, fg3m, fg3a, ftm, fta, oreb, dreb, reb, ast, stl, blk, tov, pf, pts, plusMinus "
+        "SELECT teamId, fgm, fga, ftm, fta, reb, ast, pf, pts "
         "FROM playerGame WHERE gameId = ? AND playerId = ?",
-        ("0022300061", 202704),
+        ("0027000005", 600005),
     ).fetchone()
-    assert statLine == (1610612743, 3, 8, 2, 5, 0, 0, 0, 3, 3, 1, 1, 0, 2, 0, 8, 11)
+    assert statLine == (1610612765, 10, 18, 2, 5, 6, 1, 2, 22)
+
+
+def testLoadsNoStatLinesFromTheGameLogFrom1996On(dbConnection: sqlite3.Connection) -> None:
+    ingestSeason(FixtureSource(), dbConnection, "2023-24")
+
+    # The per-game box score supplies these seasons, with exact seconds and Did Not Play rows.
+    lineCount = dbConnection.execute("SELECT COUNT(*) FROM playerGame").fetchone()[0]
+    gameCount = dbConnection.execute("SELECT COUNT(*) FROM game").fetchone()[0]
+    assert (lineCount, gameCount) == (0, 6)
 
 
 def testReadsHomeAndAwayTeamsAndScoresFromTheMatchup(dbConnection: sqlite3.Connection) -> None:
@@ -58,14 +83,14 @@ def testStoresDateSeasonStartYearAndGameType(dbConnection: sqlite3.Connection) -
 
 
 def testStoresMinutesAsSecondsFromWholeMinutes(dbConnection: sqlite3.Connection) -> None:
-    ingestSeason(FixtureSource(), dbConnection, "2023-24")
+    ingestSeason(FixtureSource(), dbConnection, "1970-71")
 
-    # Reggie Jackson played 24 minutes; the source gives no seconds.
+    # Bob Lanier played 26 minutes; the source gives no seconds.
     minutes = dbConnection.execute(
         "SELECT minutes FROM playerGame WHERE gameId = ? AND playerId = ?",
-        ("0022300061", 202704),
+        ("0027000005", 600005),
     ).fetchone()[0]
-    assert minutes == 1440
+    assert minutes == 1560
 
 
 def testStoresStatsAnEraDidNotTrackAsNull(dbConnection: sqlite3.Connection) -> None:
@@ -82,5 +107,64 @@ def testStoresStatsAnEraDidNotTrackAsNull(dbConnection: sqlite3.Connection) -> N
 
 
 def testRejectsAGameWhoseTypeItDoesNotRecognize(dbConnection: sqlite3.Connection) -> None:
-    with pytest.raises(ValueError, match="0012300061"):
-        ingestSeason(PreseasonLabelledSource(), dbConnection, "2023-24")
+    with pytest.raises(ValueError, match="0092300061"):
+        ingestSeason(UnknownTypeSource(), dbConnection, "2023-24")
+
+
+def testLabelsEachGameTypeFromTheGameIdPrefix(dbConnection: sqlite3.Connection) -> None:
+    ingestSeason(FixtureSource(), dbConnection, "2023-24")
+
+    gameTypes = dict(dbConnection.execute(
+        "SELECT gameId, gameType FROM game WHERE gameId IN (?, ?, ?, ?)",
+        ("0012300001", "0022300061", "0042300101", "0052300101"),
+    ).fetchall())
+    assert gameTypes == {
+        "0012300001": "Preseason", "0022300061": "Regular Season",
+        "0042300101": "Postseason", "0052300101": "Postseason",
+    }
+
+
+def testFlagsOnlyPlayInGames(dbConnection: sqlite3.Connection) -> None:
+    ingestSeason(FixtureSource(), dbConnection, "2023-24")
+
+    flags = dict(dbConnection.execute(
+        "SELECT gameId, isPlayIn FROM game WHERE gameType = 'Postseason'",
+    ).fetchall())
+    assert flags == {"0042300101": 0, "0052300101": 1}
+
+
+def testLoadsPostseasonStatLinesFromBefore1996(dbConnection: sqlite3.Connection) -> None:
+    ingestSeason(FixtureSource(), dbConnection, "1990-91")
+
+    # Magic Johnson, Lakers vs. Rockets on 1991-04-25: 39 minutes, 17 points.
+    statLine = dbConnection.execute(
+        "SELECT minutes, pts, ast FROM playerGame WHERE gameId = ? AND playerId = ?",
+        ("0049000005", 77142),
+    ).fetchone()
+    assert statLine == (2340, 17, 10)
+
+
+def testSummerLeagueJulyGameBelongsToThatYearsSeason(dbConnection: sqlite3.Connection) -> None:
+    ingestSeason(FixtureSource(), dbConnection, "2024-25")
+
+    game = dbConnection.execute(
+        "SELECT gameDate, season, gameType, isPlayIn FROM game WHERE gameId = ?",
+        ("1522400006",),
+    ).fetchone()
+    assert game == ("2024-07-12", 2024, "Summer League", 0)
+
+
+def testSkipsGamesAgainstNonNbaTeams(dbConnection: sqlite3.Connection) -> None:
+    ingestSeason(FixtureSource(), dbConnection, "2023-24")
+
+    # Dallas at Rakuten Monkeys (Taiwan) on 2023-10-10 is in the source but is not an NBA game.
+    storedIds = [row[0] for row in dbConnection.execute("SELECT gameId FROM game WHERE gameType = 'Preseason'")]
+    assert storedIds == ["0012300001"]
+
+
+def testSkipsStatLinesOfGamesAgainstNonNbaTeams(dbConnection: sqlite3.Connection) -> None:
+    ingestSeason(NonNbaTeamSource(), dbConnection, "1970-71")
+
+    # Without a stored game, its stat lines would be orphans.
+    lineCount = dbConnection.execute("SELECT COUNT(*) FROM playerGame WHERE gameId = ?", ("0027000005",)).fetchone()[0]
+    assert lineCount == 0

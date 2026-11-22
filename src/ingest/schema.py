@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS game (
     gameDate TEXT NOT NULL,
     season INTEGER NOT NULL,
     gameType TEXT NOT NULL,
+    isPlayIn INTEGER NOT NULL,
     homeTeamId INTEGER NOT NULL,
     awayTeamId INTEGER NOT NULL,
     homeScore INTEGER NOT NULL,

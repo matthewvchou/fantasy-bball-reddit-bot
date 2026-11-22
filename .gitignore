@@ -7,3 +7,4 @@ src/scraping/z_scores.txt
 __pycache__/
 .venv
 .claude
+/tmp/
