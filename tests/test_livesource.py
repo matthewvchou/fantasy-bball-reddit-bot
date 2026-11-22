@@ -161,7 +161,7 @@ def testTheIngestLogShowsWhereARunStopped(tmp_path: Path, dbConnection: sqlite3.
         ingestSeason(source, dbConnection, "2023-24")
 
     statuses = dict(dbConnection.execute("SELECT unitKey, status FROM ingestLog").fetchall())
-    assert statuses == {"2023-24/Pre Season": "failed"}
+    assert statuses == {"2023-24/Pre Season": "error"}
 
 
 @pytest.mark.parametrize("notAGameLog", ["[]", "null", '{"message": "Too many requests"}'])

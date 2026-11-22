@@ -233,7 +233,7 @@ def testAFailedUnitLeavesNoPartialRowsAndStopsTheRun(dbConnection: sqlite3.Conne
     counts = dbConnection.execute("SELECT (SELECT COUNT(*) FROM game), (SELECT COUNT(*) FROM playerGame)").fetchone()
     statuses = dict(dbConnection.execute("SELECT unitKey, status FROM ingestLog").fetchall())
     assert counts == (0, 0)
-    assert statuses == {"1970-71/Pre Season": "done", "1970-71/Regular Season": "failed"}
+    assert statuses == {"1970-71/Pre Season": "done", "1970-71/Regular Season": "error"}
     # The run stopped at the failure: Playoffs was never fetched.
     assert ("team", "Playoffs") not in source.fetches
 
@@ -265,16 +265,29 @@ def testRefreshKeepsStatLinesTheGameLogDoesNotSupplyFrom1996On(dbConnection: sql
     assert lineCount == 1
 
 
-def testAFailedRefreshKeepsTheUnitLoggedAsDone(dbConnection: sqlite3.Connection) -> None:
+def testAFailedRefreshLogsAnErrorButKeepsTheOldRows(dbConnection: sqlite3.Connection) -> None:
     ingestSeason(FixtureSource(), dbConnection, "1970-71")
 
     with pytest.raises(ConnectionError):
         ingestSeason(RecordingSource(isFailingOnRegularSeasonStatLines=True), dbConnection, "1970-71", shouldRefresh=True)
 
-    # The rollback restored the old rows, so the log must still say they are done.
-    status = dbConnection.execute("SELECT status FROM ingestLog WHERE unitKey = ?", ("1970-71/Regular Season",)).fetchone()[0]
+    # The rollback restored the old rows, so their count stays; only the status shows the run stopped here.
+    log = dbConnection.execute("SELECT status, rowCount FROM ingestLog WHERE unitKey = ?", ("1970-71/Regular Season",)).fetchone()
     lineCount = dbConnection.execute("SELECT COUNT(*) FROM playerGame").fetchone()[0]
-    assert (status, lineCount) == ("done", 65)
+    assert (log, lineCount) == (("error", 68), 65)
+
+
+def testAnUnfinishedRefreshIsFetchedAgainOnTheNextRun(dbConnection: sqlite3.Connection) -> None:
+    ingestSeason(FixtureSource(), dbConnection, "1970-71")
+    with pytest.raises(ConnectionError):
+        ingestSeason(RecordingSource(isFailingOnRegularSeasonStatLines=True), dbConnection, "1970-71", shouldRefresh=True)
+
+    nextRun = RecordingSource()
+    ingestSeason(nextRun, dbConnection, "1970-71")
+
+    status = dbConnection.execute("SELECT status FROM ingestLog WHERE unitKey = ?", ("1970-71/Regular Season",)).fetchone()[0]
+    assert ("team", "Regular Season") in nextRun.fetches
+    assert status == "done"
 
 
 def testAnInterruptedUnitLeavesNoPartialRows(dbConnection: sqlite3.Connection) -> None:
@@ -284,4 +297,5 @@ def testAnInterruptedUnitLeavesNoPartialRows(dbConnection: sqlite3.Connection) -
         ingestSeason(source, dbConnection, "1970-71")
 
     gameCount = dbConnection.execute("SELECT COUNT(*) FROM game").fetchone()[0]
-    assert gameCount == 0
+    status = dbConnection.execute("SELECT status FROM ingestLog WHERE unitKey = ?", ("1970-71/Regular Season",)).fetchone()[0]
+    assert (gameCount, status) == (0, "interrupted")

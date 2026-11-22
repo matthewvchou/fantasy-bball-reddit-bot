@@ -18,7 +18,8 @@ SEASON_TYPE_PREFIXES = {
 
 SEASON_GAME_LOG_KIND = "seasonGameLog"
 DONE = "done"
-FAILED = "failed"
+ERROR = "error"
+INTERRUPTED = "interrupted"
 
 # The first three digits of an NBA game ID say what kind of game it is.
 GAME_TYPES_BY_PREFIX = {
@@ -68,7 +69,7 @@ def ingestSeason(source: NbaSource, db: sqlite3.Connection, season: str, shouldR
     Raises:
         ValueError: A game ID has a prefix that is not a known Game Type.
         BaseException: Any error or interrupt from a unit is re-raised after the unit is rolled
-            back and, unless it was already done, logged as failed, so a run stops at its first failure.
+            back and logged as 'error' (or 'interrupted' for Ctrl-C), so a run stops at its first failure.
     """
     createSchema(db)
     for seasonType in SEASON_TYPE_PREFIXES:
@@ -79,13 +80,11 @@ def ingestSeason(source: NbaSource, db: sqlite3.Connection, season: str, shouldR
             rowCount = ingestUnit(source, db, season, seasonType)
             logUnit(db, SEASON_GAME_LOG_KIND, unitKey, DONE, rowCount)
             db.commit()
-        except BaseException:
+        except BaseException as error:
             # BaseException, so an interrupt also rolls back instead of leaving half a unit behind.
             db.rollback()
-            # A failed refresh restores the old rows, so a done unit stays logged as done.
-            if not isUnitDone(db, SEASON_GAME_LOG_KIND, unitKey):
-                logUnit(db, SEASON_GAME_LOG_KIND, unitKey, FAILED, 0)
-                db.commit()
+            logStop(db, SEASON_GAME_LOG_KIND, unitKey, INTERRUPTED if isinstance(error, KeyboardInterrupt) else ERROR)
+            db.commit()
             raise
 
 
@@ -122,6 +121,20 @@ def isUnitDone(db: sqlite3.Connection, kind: str, unitKey: str) -> bool:
     """Say whether the unit is logged as done."""
     row = db.execute("SELECT status FROM ingestLog WHERE kind = ? AND unitKey = ?", (kind, unitKey)).fetchone()
     return row is not None and row[0] == DONE
+
+
+def logStop(db: sqlite3.Connection, kind: str, unitKey: str, status: str) -> None:
+    """
+    Record that a run stopped at this unit, without touching an earlier row count.
+
+    A failed refresh rolls back to the old rows, so the count of what is stored stays true
+    while the status shows the run stopped here. Not marked done, so the next run retries it.
+    """
+    db.execute(
+        "INSERT INTO ingestLog (kind, unitKey, status, rowCount, finishedAt) VALUES (?, ?, ?, 0, ?) "
+        "ON CONFLICT (kind, unitKey) DO UPDATE SET status = excluded.status, finishedAt = excluded.finishedAt",
+        (kind, unitKey, status, datetime.now(timezone.utc).isoformat()),
+    )
 
 
 def logUnit(db: sqlite3.Connection, kind: str, unitKey: str, status: str, rowCount: int) -> None:
