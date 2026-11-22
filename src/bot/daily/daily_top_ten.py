@@ -150,8 +150,7 @@ def build_report(players: pd.DataFrame, date_str: str, last_season: str) -> tupl
         f"Each player's line is compared to {last_season} per-game averages for their primary position "
         f"(G, F or C, using players who averaged {MIN_BASELINE_MINUTES}+ minutes). Each of the 9 categories becomes a z-score "
         "(FG% and FT% are weighted by attempts, turnovers count against). Z-scores are capped at ±10 and "
-        f"summed into the Night Score. Only players with {MIN_BASELINE_MINUTES}+ minutes are ranked, "
-        "so short bench stints don't fill the list.\n\n"
+        "summed into the Night Score. Every player who played is ranked.\n\n"
         "* **Why is [insert player] not ranked here? They had a great game!**\n\n"
         "It doesn't mean that this player didn't perform well, it just means that some players had a more "
         "balanced performance than them across the 9 categories.\n\n"
@@ -189,7 +188,7 @@ def main(date_str: str | None = None, is_real: bool = False) -> None:
     Fetch a night's stats, score them against last season, and post the top 10.
 
     Posts to the test subreddit unless is_real is True. Does nothing if any game that night is not Final.
-    Only players with at least MIN_BASELINE_MINUTES minutes are ranked.
+    Every player who played is ranked, whatever their minutes.
 
     Args:
         date_str: Game date in 'YYYY-MM-DD' format. Defaults to yesterday.
@@ -208,7 +207,6 @@ def main(date_str: str | None = None, is_real: bool = False) -> None:
     positions = get_primary_positions([last_start_year, last_start_year + 1])
     means, stds = build_baseline(get_season_per_game_stats(last_season), positions)
     players = score_players(night_stats, positions, means, stds)
-    players = players[players['MINUTES'] >= MIN_BASELINE_MINUTES].reset_index(drop=True)
 
     title, body = build_report(players, date_str, last_season)
     print(title)
