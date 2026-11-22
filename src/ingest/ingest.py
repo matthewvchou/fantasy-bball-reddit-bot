@@ -1,12 +1,24 @@
 import sqlite3
+from datetime import datetime, timezone
 from typing import Any
 
 from src.ingest.schema import createSchema
 from src.ingest.source import NbaSource
 
 # The source's own season type names, which differ from our Game Types ('Pre Season' vs
-# 'Preseason', 'PlayIn' vs 'Postseason'). Each season is fetched once per name.
-SEASON_TYPES = ["Pre Season", "Regular Season", "Playoffs", "PlayIn", "Summer League"]
+# 'Preseason', 'PlayIn' vs 'Postseason'). Each season is fetched once per name, and each
+# name's games share one game ID prefix, which is how a unit's old rows are found.
+SEASON_TYPE_PREFIXES = {
+    "Pre Season": "001",
+    "Regular Season": "002",
+    "Playoffs": "004",
+    "PlayIn": "005",
+    "Summer League": "152",
+}
+
+SEASON_GAME_LOG_KIND = "seasonGameLog"
+DONE = "done"
+FAILED = "failed"
 
 # The first three digits of an NBA game ID say what kind of game it is.
 GAME_TYPES_BY_PREFIX = {
@@ -37,32 +49,87 @@ STAT_COLUMNS = {
 }
 
 
-def ingestSeason(source: NbaSource, db: sqlite3.Connection, season: str) -> None:
+def ingestSeason(source: NbaSource, db: sqlite3.Connection, season: str, shouldRefresh: bool = False) -> None:
     """
     Load one season of games, across every Game Type, into the database.
 
-    Games against a Non-NBA Team are skipped. Player stat lines come from the game log
-    only for seasons before BOX_SCORE_FIRST_SEASON. Commits the transaction when it finishes.
-    Not safe to repeat: a second run for the same season fails on the primary keys,
-    because reruns are a separate ticket.
+    One unit is one season and source season type. Each unit loads in its own transaction and
+    is logged; units already logged as done are skipped, so a rerun resumes where a failed run
+    stopped, unless shouldRefresh is set, which replaces each unit's rows. Games against a
+    Non-NBA Team are skipped. Player stat lines come from the game log only for seasons
+    before BOX_SCORE_FIRST_SEASON.
 
     Args:
         source: Where the NBA API responses come from.
         db: Open SQLite connection; the tables are created if missing.
         season: Season label such as '2023-24'.
+        shouldRefresh: True to reload units that are already done instead of skipping them.
 
     Raises:
         ValueError: A game ID has a prefix that is not a known Game Type.
+        BaseException: Any error or interrupt from a unit is re-raised after the unit is rolled
+            back and, unless it was already done, logged as failed, so a run stops at its first failure.
     """
     createSchema(db)
+    for seasonType in SEASON_TYPE_PREFIXES:
+        unitKey = f"{season}/{seasonType}"
+        if not shouldRefresh and isUnitDone(db, SEASON_GAME_LOG_KIND, unitKey):
+            continue
+        try:
+            rowCount = ingestUnit(source, db, season, seasonType)
+            logUnit(db, SEASON_GAME_LOG_KIND, unitKey, DONE, rowCount)
+            db.commit()
+        except BaseException:
+            # BaseException, so an interrupt also rolls back instead of leaving half a unit behind.
+            db.rollback()
+            # A failed refresh restores the old rows, so a done unit stays logged as done.
+            if not isUnitDone(db, SEASON_GAME_LOG_KIND, unitKey):
+                logUnit(db, SEASON_GAME_LOG_KIND, unitKey, FAILED, 0)
+                db.commit()
+            raise
+
+
+def ingestUnit(source: NbaSource, db: sqlite3.Connection, season: str, seasonType: str) -> int:
+    """
+    Load one season and source season type without committing; return the rows written.
+
+    Deletes the unit's existing rows first, so loading a unit again never duplicates them.
+    """
     seasonStartYear = int(season[:4])
-    for seasonType in SEASON_TYPES:
-        storedGameIds = insertGames(db, readRows(source.fetchTeamGameLog(season, seasonType)), seasonStartYear)
-        if seasonStartYear < BOX_SCORE_FIRST_SEASON:
-            playerRows = readRows(source.fetchPlayerGameLog(season, seasonType))
-            # A skipped game's stat lines would be orphans, since nothing links them to a game row.
-            insertPlayerGames(db, [row for row in playerRows if row["GAME_ID"] in storedGameIds])
-    db.commit()
+    deleteUnitRows(db, seasonStartYear, SEASON_TYPE_PREFIXES[seasonType])
+    storedGameIds = insertGames(db, readRows(source.fetchTeamGameLog(season, seasonType)), seasonStartYear)
+    rowCount = len(storedGameIds)
+    if seasonStartYear < BOX_SCORE_FIRST_SEASON:
+        playerRows = readRows(source.fetchPlayerGameLog(season, seasonType))
+        # A skipped game's stat lines would be orphans, since nothing links them to a game row.
+        keptRows = [row for row in playerRows if row["GAME_ID"] in storedGameIds]
+        insertPlayerGames(db, keptRows)
+        rowCount += len(keptRows)
+    return rowCount
+
+
+def deleteUnitRows(db: sqlite3.Connection, seasonStartYear: int, gameIdPrefix: str) -> None:
+    """Remove the games and stat lines a unit loaded earlier, so reloading it never duplicates rows."""
+    # From BOX_SCORE_FIRST_SEASON on, the box score loader owns the stat lines and this loader never
+    # rewrites them, so deleting them here would lose them.
+    if seasonStartYear < BOX_SCORE_FIRST_SEASON:
+        unitGames = "SELECT gameId FROM game WHERE season = ? AND substr(gameId, 1, 3) = ?"
+        db.execute(f"DELETE FROM playerGame WHERE gameId IN ({unitGames})", (seasonStartYear, gameIdPrefix))
+    db.execute("DELETE FROM game WHERE season = ? AND substr(gameId, 1, 3) = ?", (seasonStartYear, gameIdPrefix))
+
+
+def isUnitDone(db: sqlite3.Connection, kind: str, unitKey: str) -> bool:
+    """Say whether the unit is logged as done."""
+    row = db.execute("SELECT status FROM ingestLog WHERE kind = ? AND unitKey = ?", (kind, unitKey)).fetchone()
+    return row is not None and row[0] == DONE
+
+
+def logUnit(db: sqlite3.Connection, kind: str, unitKey: str, status: str, rowCount: int) -> None:
+    """Record a unit's outcome, replacing an earlier row such as a failed attempt."""
+    db.execute(
+        "INSERT OR REPLACE INTO ingestLog (kind, unitKey, status, rowCount, finishedAt) VALUES (?, ?, ?, ?, ?)",
+        (kind, unitKey, status, rowCount, datetime.now(timezone.utc).isoformat()),
+    )
 
 
 def readRows(response: dict[str, Any]) -> list[dict[str, Any]]:
