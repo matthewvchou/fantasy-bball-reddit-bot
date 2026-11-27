@@ -47,6 +47,26 @@ CREATE TABLE IF NOT EXISTS franchiseName (
 )
 """
 
+# One row per NBA player ID, with the current name and the bio the all-time player index lists.
+# Positions are the index's text split in order, a choice the index itself does not state: the
+# first letter listed is the primary position and the second, if any, the secondary.
+PLAYER_TABLE = """
+CREATE TABLE IF NOT EXISTS player (
+    playerId INTEGER PRIMARY KEY,
+    firstName TEXT NOT NULL,
+    lastName TEXT NOT NULL,
+    heightInches INTEGER,
+    weightPounds INTEGER,
+    country TEXT,
+    college TEXT,
+    draftYear INTEGER,
+    draftRound INTEGER,
+    draftPick INTEGER,
+    primaryPosition TEXT,
+    secondaryPosition TEXT
+)
+"""
+
 # One row per unit of work, so a rerun can tell which units already finished.
 INGEST_LOG_TABLE = """
 CREATE TABLE IF NOT EXISTS ingestLog (
@@ -66,4 +86,5 @@ def createSchema(db: sqlite3.Connection) -> None:
     db.execute(PLAYER_GAME_TABLE)
     db.execute(FRANCHISE_TABLE)
     db.execute(FRANCHISE_NAME_TABLE)
+    db.execute(PLAYER_TABLE)
     db.execute(INGEST_LOG_TABLE)

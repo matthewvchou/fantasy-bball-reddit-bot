@@ -188,3 +188,14 @@ def testFetchesFranchiseHistoryAndSavesItsPayload(tmp_path: Path) -> None:
 
     assert response["resultSets"][0]["rowSet"] == [[1610612760]]
     assert (tmp_path / "franchiseHistory" / "all.json").read_text() == franchiseText
+
+
+def testFetchesThePlayerIndexAndSavesItsPayload(tmp_path: Path) -> None:
+    clock = FakeClock()
+    indexText = json.dumps({"resultSets": [{"name": "PlayerIndex", "headers": ["PERSON_ID"], "rowSet": [[77142]]}]})
+    source = makeSource(clock, ScriptedTransport(clock, [indexText]), tmp_path)
+
+    response = source.fetchPlayerIndex("2025-26")
+
+    assert response["resultSets"][0]["rowSet"] == [[77142]]
+    assert (tmp_path / "playerIndex" / "2025-26.json").read_text() == indexText

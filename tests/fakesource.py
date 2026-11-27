@@ -21,6 +21,11 @@ class FixtureSource:
         with open(FIXTURE_DIR / "franchiseHistory.json") as file:
             return json.load(file)
 
+    def fetchPlayerIndex(self, season: str) -> dict[str, Any]:
+        """Return the recorded all-time player index; the season label does not change which players it lists."""
+        with open(FIXTURE_DIR / "playerIndex.json") as file:
+            return json.load(file)
+
     def loadFixture(self, name: str, season: str, seasonType: str) -> dict[str, Any]:
         """Read one recorded response; a season type with no recording gets an empty response like a season without such games."""
         path = FIXTURE_DIR / f"{name}_{season}_{seasonType.replace(' ', '')}.json"

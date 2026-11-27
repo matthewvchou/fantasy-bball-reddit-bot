@@ -20,3 +20,12 @@ class NbaSource(Protocol):
     def fetchFranchiseHistory(self) -> dict[str, Any]:
         """Return the raw franchise history response: a frame of current teams and one of defunct teams."""
         ...
+
+    def fetchPlayerIndex(self, season: str) -> dict[str, Any]:
+        """
+        Return the raw all-time player index, one row per player.
+
+        The season label does not change which players are listed, but a player who was traded
+        that season appears once per team.
+        """
+        ...
