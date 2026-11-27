@@ -27,6 +27,26 @@ CREATE TABLE IF NOT EXISTS playerGame (
 )
 """
 
+# One row per team ID, which survives moves and renames; a defunct team is its own Franchise.
+FRANCHISE_TABLE = """
+CREATE TABLE IF NOT EXISTS franchise (
+    teamId INTEGER PRIMARY KEY,
+    isDefunct INTEGER NOT NULL
+)
+"""
+
+# Every name a Franchise has carried, as the source lists them; its current name is derived on read.
+FRANCHISE_NAME_TABLE = """
+CREATE TABLE IF NOT EXISTS franchiseName (
+    teamId INTEGER NOT NULL,
+    city TEXT NOT NULL,
+    name TEXT NOT NULL,
+    startYear INTEGER NOT NULL,
+    endYear INTEGER NOT NULL,
+    PRIMARY KEY (teamId, city, name, startYear, endYear)
+)
+"""
+
 # One row per unit of work, so a rerun can tell which units already finished.
 INGEST_LOG_TABLE = """
 CREATE TABLE IF NOT EXISTS ingestLog (
@@ -44,4 +64,6 @@ def createSchema(db: sqlite3.Connection) -> None:
     """Create the ingest tables if they do not exist yet."""
     db.execute(GAME_TABLE)
     db.execute(PLAYER_GAME_TABLE)
+    db.execute(FRANCHISE_TABLE)
+    db.execute(FRANCHISE_NAME_TABLE)
     db.execute(INGEST_LOG_TABLE)

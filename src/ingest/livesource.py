@@ -74,6 +74,10 @@ class LiveNbaSource:
         """Return the season game log with one row per player per game."""
         return self.fetchGameLog("P", "playerGameLog", season, seasonType)
 
+    def fetchFranchiseHistory(self) -> dict[str, Any]:
+        """Return the franchise history: every team with its past names, current and defunct teams in separate frames."""
+        return self.fetchJson("franchisehistory", {"LeagueID": "00"}, "franchiseHistory", "all")
+
     def fetchGameLog(self, mode: str, folder: str, season: str, seasonType: str) -> dict[str, Any]:
         """
         Fetch one season game log.

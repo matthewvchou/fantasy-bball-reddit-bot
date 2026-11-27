@@ -16,3 +16,7 @@ class NbaSource(Protocol):
     def fetchTeamGameLog(self, season: str, seasonType: str) -> dict[str, Any]:
         """Return the raw season game log response with one row per team per game; seasonType as for fetchPlayerGameLog."""
         ...
+
+    def fetchFranchiseHistory(self) -> dict[str, Any]:
+        """Return the raw franchise history response: a frame of current teams and one of defunct teams."""
+        ...

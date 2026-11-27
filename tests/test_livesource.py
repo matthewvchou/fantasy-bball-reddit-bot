@@ -177,3 +177,14 @@ def testTreatsValidJsonThatIsNotAGameLogAsAFailure(tmp_path: Path, notAGameLog: 
     # The odd response is kept for debugging, and the last good payload is untouched.
     assert (tmp_path / "failed" / "teamGameLog" / "2023-24_Playoffs.json").read_text() == notAGameLog
     assert (tmp_path / "teamGameLog" / "2023-24_Playoffs.json").read_text() == RESPONSE_TEXT
+
+
+def testFetchesFranchiseHistoryAndSavesItsPayload(tmp_path: Path) -> None:
+    clock = FakeClock()
+    franchiseText = json.dumps({"resultSets": [{"name": "FranchiseHistory", "headers": ["TEAM_ID"], "rowSet": [[1610612760]]}]})
+    source = makeSource(clock, ScriptedTransport(clock, [franchiseText]), tmp_path)
+
+    response = source.fetchFranchiseHistory()
+
+    assert response["resultSets"][0]["rowSet"] == [[1610612760]]
+    assert (tmp_path / "franchiseHistory" / "all.json").read_text() == franchiseText

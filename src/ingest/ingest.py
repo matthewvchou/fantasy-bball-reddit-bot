@@ -1,7 +1,8 @@
 import sqlite3
-from datetime import datetime, timezone
+from functools import partial
 from typing import Any
 
+from src.ingest.ingestlog import runLoggedUnit
 from src.ingest.schema import createSchema
 from src.ingest.source import NbaSource
 
@@ -17,9 +18,6 @@ SEASON_TYPE_PREFIXES = {
 }
 
 SEASON_GAME_LOG_KIND = "seasonGameLog"
-DONE = "done"
-ERROR = "error"
-INTERRUPTED = "interrupted"
 
 # The first three digits of an NBA game ID say what kind of game it is.
 GAME_TYPES_BY_PREFIX = {
@@ -73,19 +71,10 @@ def ingestSeason(source: NbaSource, db: sqlite3.Connection, season: str, shouldR
     """
     createSchema(db)
     for seasonType in SEASON_TYPE_PREFIXES:
-        unitKey = f"{season}/{seasonType}"
-        if not shouldRefresh and isUnitDone(db, SEASON_GAME_LOG_KIND, unitKey):
-            continue
-        try:
-            rowCount = ingestUnit(source, db, season, seasonType)
-            logUnit(db, SEASON_GAME_LOG_KIND, unitKey, DONE, rowCount)
-            db.commit()
-        except BaseException as error:
-            # BaseException, so an interrupt also rolls back instead of leaving half a unit behind.
-            db.rollback()
-            logStop(db, SEASON_GAME_LOG_KIND, unitKey, INTERRUPTED if isinstance(error, KeyboardInterrupt) else ERROR)
-            db.commit()
-            raise
+        runLoggedUnit(
+            db, SEASON_GAME_LOG_KIND, f"{season}/{seasonType}",
+            partial(ingestUnit, source, db, season, seasonType), shouldRefresh,
+        )
 
 
 def ingestUnit(source: NbaSource, db: sqlite3.Connection, season: str, seasonType: str) -> int:
@@ -115,34 +104,6 @@ def deleteUnitRows(db: sqlite3.Connection, seasonStartYear: int, gameIdPrefix: s
         unitGames = "SELECT gameId FROM game WHERE season = ? AND substr(gameId, 1, 3) = ?"
         db.execute(f"DELETE FROM playerGame WHERE gameId IN ({unitGames})", (seasonStartYear, gameIdPrefix))
     db.execute("DELETE FROM game WHERE season = ? AND substr(gameId, 1, 3) = ?", (seasonStartYear, gameIdPrefix))
-
-
-def isUnitDone(db: sqlite3.Connection, kind: str, unitKey: str) -> bool:
-    """Say whether the unit is logged as done."""
-    row = db.execute("SELECT status FROM ingestLog WHERE kind = ? AND unitKey = ?", (kind, unitKey)).fetchone()
-    return row is not None and row[0] == DONE
-
-
-def logStop(db: sqlite3.Connection, kind: str, unitKey: str, status: str) -> None:
-    """
-    Record that a run stopped at this unit, without touching an earlier row count.
-
-    A failed refresh rolls back to the old rows, so the count of what is stored stays true
-    while the status shows the run stopped here. Not marked done, so the next run retries it.
-    """
-    db.execute(
-        "INSERT INTO ingestLog (kind, unitKey, status, rowCount, finishedAt) VALUES (?, ?, ?, 0, ?) "
-        "ON CONFLICT (kind, unitKey) DO UPDATE SET status = excluded.status, finishedAt = excluded.finishedAt",
-        (kind, unitKey, status, datetime.now(timezone.utc).isoformat()),
-    )
-
-
-def logUnit(db: sqlite3.Connection, kind: str, unitKey: str, status: str, rowCount: int) -> None:
-    """Record a unit's outcome, replacing an earlier row such as a failed attempt."""
-    db.execute(
-        "INSERT OR REPLACE INTO ingestLog (kind, unitKey, status, rowCount, finishedAt) VALUES (?, ?, ?, ?, ?)",
-        (kind, unitKey, status, rowCount, datetime.now(timezone.utc).isoformat()),
-    )
 
 
 def readRows(response: dict[str, Any]) -> list[dict[str, Any]]:
