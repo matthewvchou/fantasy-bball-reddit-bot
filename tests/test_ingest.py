@@ -1,3 +1,4 @@
+import logging
 import sqlite3
 from typing import Any
 
@@ -285,9 +286,12 @@ def testAnUnfinishedRefreshIsFetchedAgainOnTheNextRun(dbConnection: sqlite3.Conn
     nextRun = RecordingSource()
     ingestSeason(nextRun, dbConnection, "1970-71")
 
-    status = dbConnection.execute("SELECT status FROM ingestLog WHERE unitKey = ?", ("1970-71/Regular Season",)).fetchone()[0]
+    status, message = dbConnection.execute(
+        "SELECT status, message FROM ingestLog WHERE unitKey = ?", ("1970-71/Regular Season",),
+    ).fetchone()
     assert ("team", "Regular Season") in nextRun.fetches
-    assert status == "done"
+    # The retry succeeded, so the earlier error text is gone.
+    assert (status, message) == ("done", None)
 
 
 def testAnInterruptedUnitLeavesNoPartialRows(dbConnection: sqlite3.Connection) -> None:
@@ -299,3 +303,23 @@ def testAnInterruptedUnitLeavesNoPartialRows(dbConnection: sqlite3.Connection) -
     gameCount = dbConnection.execute("SELECT COUNT(*) FROM game").fetchone()[0]
     status = dbConnection.execute("SELECT status FROM ingestLog WHERE unitKey = ?", ("1970-71/Regular Season",)).fetchone()[0]
     assert (gameCount, status) == (0, "interrupted")
+
+
+def testAnErrorUnitLogsItsMessageInTheDatabaseAndTheConsole(
+    dbConnection: sqlite3.Connection, caplog: pytest.LogCaptureFixture,
+) -> None:
+    with caplog.at_level(logging.ERROR), pytest.raises(ConnectionError):
+        ingestSeason(RecordingSource(isFailingOnRegularSeasonStatLines=True), dbConnection, "1970-71")
+
+    messages = dict(dbConnection.execute("SELECT unitKey, message FROM ingestLog").fetchall())
+    assert messages == {"1970-71/Pre Season": None, "1970-71/Regular Season": "ConnectionError: NBA API unreachable"}
+    errorLines = [record.getMessage() for record in caplog.records if record.levelno == logging.ERROR]
+    assert any("1970-71/Regular Season" in line and "NBA API unreachable" in line for line in errorLines)
+
+
+def testAnInterruptedUnitLogsAMessageToo(dbConnection: sqlite3.Connection) -> None:
+    with pytest.raises(KeyboardInterrupt):
+        ingestSeason(RecordingSource(isFailingOnRegularSeasonStatLines=True, error=KeyboardInterrupt()), dbConnection, "1970-71")
+
+    message = dbConnection.execute("SELECT message FROM ingestLog WHERE unitKey = ?", ("1970-71/Regular Season",)).fetchone()[0]
+    assert message == "KeyboardInterrupt"

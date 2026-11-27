@@ -27,7 +27,48 @@ CREATE TABLE IF NOT EXISTS playerGame (
 )
 """
 
+# One row per team ID, which survives moves and renames; a defunct team is its own Franchise.
+FRANCHISE_TABLE = """
+CREATE TABLE IF NOT EXISTS franchise (
+    teamId INTEGER PRIMARY KEY,
+    isDefunct INTEGER NOT NULL
+)
+"""
+
+# Every name a Franchise has carried, as the source lists them; its current name is derived on read.
+FRANCHISE_NAME_TABLE = """
+CREATE TABLE IF NOT EXISTS franchiseName (
+    teamId INTEGER NOT NULL,
+    city TEXT NOT NULL,
+    name TEXT NOT NULL,
+    startYear INTEGER NOT NULL,
+    endYear INTEGER NOT NULL,
+    PRIMARY KEY (teamId, city, name, startYear, endYear)
+)
+"""
+
+# One row per NBA player ID, with the current name and the bio the all-time player index lists.
+# Positions are the index's text split in order, a choice the index itself does not state: the
+# first letter listed is the primary position and the second, if any, the secondary.
+PLAYER_TABLE = """
+CREATE TABLE IF NOT EXISTS player (
+    playerId INTEGER PRIMARY KEY,
+    firstName TEXT NOT NULL,
+    lastName TEXT NOT NULL,
+    heightInches INTEGER,
+    weightPounds INTEGER,
+    country TEXT,
+    college TEXT,
+    draftYear INTEGER,
+    draftRound INTEGER,
+    draftPick INTEGER,
+    primaryPosition TEXT,
+    secondaryPosition TEXT
+)
+"""
+
 # One row per unit of work, so a rerun can tell which units already finished.
+# message holds the error text when a unit stopped the run, and is NULL otherwise.
 INGEST_LOG_TABLE = """
 CREATE TABLE IF NOT EXISTS ingestLog (
     kind TEXT NOT NULL,
@@ -35,6 +76,7 @@ CREATE TABLE IF NOT EXISTS ingestLog (
     status TEXT NOT NULL,
     rowCount INTEGER NOT NULL,
     finishedAt TEXT NOT NULL,
+    message TEXT,
     PRIMARY KEY (kind, unitKey)
 )
 """
@@ -44,4 +86,7 @@ def createSchema(db: sqlite3.Connection) -> None:
     """Create the ingest tables if they do not exist yet."""
     db.execute(GAME_TABLE)
     db.execute(PLAYER_GAME_TABLE)
+    db.execute(FRANCHISE_TABLE)
+    db.execute(FRANCHISE_NAME_TABLE)
+    db.execute(PLAYER_TABLE)
     db.execute(INGEST_LOG_TABLE)
