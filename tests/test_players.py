@@ -1,8 +1,25 @@
 import sqlite3
+from typing import Any
+
+import pytest
 
 from src.ingest.ingest import ingestSeason
 from src.ingest.players import loadPlayers
 from tests.fakesource import FixtureSource
+
+
+class BadHeightSource(FixtureSource):
+    """Serves the player index with Magic Johnson's height changed to a form the parser does not know."""
+
+    def fetchPlayerIndex(self, season: str) -> dict[str, Any]:
+        response = super().fetchPlayerIndex(season)
+        resultSet = response["resultSets"][0]
+        idColumn = resultSet["headers"].index("PERSON_ID")
+        heightColumn = resultSet["headers"].index("HEIGHT")
+        for row in resultSet["rowSet"]:
+            if row[idColumn] == 77142:
+                row[heightColumn] = "6'9"
+        return response
 
 
 def testParsesHeightFromFeetAndInchesToInches(dbConnection: sqlite3.Connection) -> None:
@@ -108,3 +125,18 @@ def testRefreshReplacesTheStoredPlayers(dbConnection: sqlite3.Connection) -> Non
 
     lastName = dbConnection.execute("SELECT lastName FROM player WHERE playerId = ?", (77142,)).fetchone()[0]
     assert lastName == "Johnson"
+
+
+def testABadValueFailsTheLoadAndTheLogSaysWhichPlayerAndValue(dbConnection: sqlite3.Connection) -> None:
+    with pytest.raises(ValueError, match="77142"):
+        loadPlayers(BadHeightSource(), dbConnection, "2025-26")
+
+    playerCount = dbConnection.execute("SELECT COUNT(*) FROM player").fetchone()[0]
+    status, message = dbConnection.execute("SELECT status, message FROM ingestLog").fetchone()
+    assert playerCount == 0
+    assert status == "error"
+    # The message names the player, the raw height and weight, and the underlying cause.
+    assert "player 77142 (Magic Johnson)" in message
+    assert "HEIGHT=\"6'9\"" in message
+    assert "WEIGHT='220'" in message
+    assert "ValueError" in message

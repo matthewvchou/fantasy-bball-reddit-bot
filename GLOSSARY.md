@@ -14,6 +14,8 @@
 
 **Position**: One of Guard (G), Forward (F), or Center (C). A player can hold more than one in the same Season, for example G and F.
 
+**Primary Position / Secondary Position**: A player's all-time Positions, read in the order the NBA's player index lists them: `G-F` is primary G and secondary F, and a lone `G` has no secondary. The NBA does not say the order means importance (Magic Johnson is listed `F-G`), so treat it as a hint. Per-Season Positions carry no ranking.
+
 **Did Not Play**: A player on a game's roster who did not take the court. Different from a player who played and recorded zero in every stat.
 
 **Not Tracked**: A stat the league did not record in that era. Distinct from a recorded zero.

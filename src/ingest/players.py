@@ -1,5 +1,6 @@
 """Loads players and their bio from the NBA's all-time player index."""
 
+import re
 import sqlite3
 from functools import partial
 from typing import Any
@@ -11,6 +12,7 @@ from src.ingest.source import NbaSource
 PLAYER_INDEX_KIND = "playerIndex"
 PLAYER_INDEX_UNIT = "all"
 INCHES_PER_FOOT = 12
+HEIGHT_PATTERN = re.compile(r"(\d)-(\d{1,2})")
 
 # The index uses this text for players who did not attend college; it is not a college.
 NO_COLLEGE = "No College"
@@ -53,8 +55,23 @@ def parsePlayers(resultSet: dict[str, Any]) -> list[tuple[Any, ...]]:
     for values in resultSet["rowSet"]:
         row = dict(zip(resultSet["headers"], values))
         # A traded player is listed once per team with identical bio, so the first row is kept.
-        players.setdefault(row["PERSON_ID"], parsePlayer(row))
+        players.setdefault(row["PERSON_ID"], parsePlayerOrExplain(row))
     return list(players.values())
+
+
+def parsePlayerOrExplain(row: dict[str, Any]) -> tuple[Any, ...]:
+    """
+    Parse one index row, or raise a ValueError that names the player and shows the raw height and weight.
+
+    The ingest log keeps this text, so a value the parser does not know can be found and fixed.
+    """
+    try:
+        return parsePlayer(row)
+    except ValueError as error:
+        raise ValueError(
+            f"player {row['PERSON_ID']} ({row['PLAYER_FIRST_NAME']} {row['PLAYER_LAST_NAME']}): "
+            f"HEIGHT={row['HEIGHT']!r} WEIGHT={row['WEIGHT']!r}: {error}"
+        ) from error
 
 
 def parsePlayer(row: dict[str, Any]) -> tuple[Any, ...]:
@@ -70,11 +87,18 @@ def parsePlayer(row: dict[str, Any]) -> tuple[Any, ...]:
 
 
 def parseHeightInches(height: str | None) -> int | None:
-    """Convert a height such as '6-10' to inches (82); a missing height is None."""
+    """
+    Convert a height such as '6-10' to inches (82); a missing height is None.
+
+    Raises:
+        ValueError: The height is not in feet-inches form, so the load stops instead of guessing.
+    """
     if not height:
         return None
-    feet, inches = height.split("-")
-    return int(feet) * INCHES_PER_FOOT + int(inches)
+    match = HEIGHT_PATTERN.fullmatch(height)
+    if match is None:
+        raise ValueError(f"height is not in feet-inches form like '6-10': {height!r}")
+    return int(match[1]) * INCHES_PER_FOOT + int(match[2])
 
 
 def parseWeightPounds(weight: str | None) -> int | None:

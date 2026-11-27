@@ -68,6 +68,7 @@ CREATE TABLE IF NOT EXISTS player (
 """
 
 # One row per unit of work, so a rerun can tell which units already finished.
+# message holds the error text when a unit stopped the run, and is NULL otherwise.
 INGEST_LOG_TABLE = """
 CREATE TABLE IF NOT EXISTS ingestLog (
     kind TEXT NOT NULL,
@@ -75,6 +76,7 @@ CREATE TABLE IF NOT EXISTS ingestLog (
     status TEXT NOT NULL,
     rowCount INTEGER NOT NULL,
     finishedAt TEXT NOT NULL,
+    message TEXT,
     PRIMARY KEY (kind, unitKey)
 )
 """
